@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
         body {
@@ -67,6 +68,7 @@
             margin-bottom: 30px;
             border-radius: 8px;
             transition: border-color 0.3s;
+            cursor: pointer;
         }
         
         .upload-section:hover {
@@ -79,10 +81,31 @@
         }
         
         input[type="file"] {
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            display: none; /* Hide the default file input */
+        }
+        
+        .upload-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 15px 10px;
+            transition: background-color 0.3s;
+        }
+        
+        .upload-btn:hover {
+            background: #0056b3;
+        }
+        
+        .upload-btn.secondary {
+            background: #6c757d;
+        }
+        
+        .upload-btn.secondary:hover {
+            background: #545b62;
         }
         
         .file-info {
@@ -312,9 +335,19 @@
         <div id="analyzer-tab" class="tab-content active">
             <div class="upload-section" id="uploadSection">
                 <h3>Upload GPX File</h3>
-                <p>Drag and drop your GPX file here or click to select</p>
+                <p>Drag and drop your GPX file here, or use the button below</p>
                 <input type="file" id="gpxFile" accept=".gpx" />
-                <button class="btn" onclick="testWithSampleData()" style="margin-top: 10px;">Test with Sample Data</button>
+                <div>
+                    <button class="upload-btn" onclick="document.getElementById('gpxFile').click()">
+                        📁 Choose GPX File
+                    </button>
+                    <button class="upload-btn secondary" onclick="testWithSampleData()">
+                        🧪 Test with Sample Data
+                    </button>
+                </div>
+                <p style="font-size: 14px; color: #666; margin-top: 15px;">
+                    Supports .gpx files from GPS devices, running apps, and mapping software
+                </p>
             </div>
             
             <div class="error" id="errorDiv"></div>
@@ -385,6 +418,7 @@
                 <div class="leg-input">
                     <button class="btn" onclick="recalculateTable()">Recalculate Table</button>
                     <button class="btn" onclick="exportTableToCSV()" style="margin-left: 10px;">Export to CSV</button>
+                    <button class="btn" onclick="exportToPDF()" style="margin-left: 10px;">Export to PDF</button>
                     <div style="margin-bottom: 10px;">
                         <label for="saveRouteNameInput">Route Name for Saving:</label>
                         <input type="text" id="saveRouteNameInput" placeholder="Enter route name (optional)" style="width: 100%; padding: 8px; box-sizing: border-box;">
@@ -455,7 +489,6 @@
         uploadSection.addEventListener('dragover', e => { e.preventDefault(); uploadSection.classList.add('drag-over') });
         uploadSection.addEventListener('dragleave', () => uploadSection.classList.remove('drag-over'));
         uploadSection.addEventListener('drop', e => { e.preventDefault(); uploadSection.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
-        uploadSection.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
         function switchTab(tabName) {
@@ -1566,6 +1599,408 @@
                 showSuccess('Table exported to CSV successfully!');
             } else {
                 showError('CSV export not supported by your browser.');
+            }
+        }
+
+        function exportToPDF() {
+            if (!trackPoints.length) {
+                showError('No route data to export.');
+                return;
+            }
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                let yPosition = 20;
+                const pageWidth = doc.internal.pageSize.width;
+                const margin = 20;
+                const contentWidth = pageWidth - (2 * margin);
+                
+                // Title
+                doc.setFontSize(20);
+                doc.setFont("helvetica", "bold");
+                const routeName = document.getElementById('saveRouteNameInput').value.trim() || currentFilename || 'Route Plan';
+                doc.text(routeName, pageWidth / 2, yPosition, { align: 'center' });
+                yPosition += 15;
+                
+                // Add date and time
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                const now = new Date().toLocaleString();
+                doc.text(`Generated: ${now}`, pageWidth / 2, yPosition, { align: 'center' });
+                yPosition += 20;
+                
+                // Route Summary
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text('Route Summary', margin, yPosition);
+                yPosition += 10;
+                
+                doc.setFontSize(10);
+                doc.setFont("helvetica", "normal");
+                const totalDistance = trackPoints[trackPoints.length-1].cumulativeDistance.toFixed(2);
+                const totalGain = calculateTotalElevationGain().toFixed(0);
+                const totalLoss = calculateTotalElevationLoss().toFixed(0);
+                
+                const summaryData = [
+                    `Total Distance: ${totalDistance} miles`,
+                    `Total Elevation Gain: ${totalGain} ft`,
+                    `Total Elevation Loss: ${totalLoss} ft`,
+                    `Track Points: ${trackPoints.length.toLocaleString()}`,
+                    `Time Data: ${hasValidTime ? 'Available' : 'Not available'}`
+                ];
+                
+                if (usingTargetTime && targetTimeSeconds) {
+                    summaryData.push(`Target Time: ${formatTime(targetTimeSeconds)}`);
+                    if (slowdownFactorPercent !== 0) {
+                        summaryData.push(`Pace Variation: ${slowdownFactorPercent}%`);
+                    }
+                }
+                
+                summaryData.forEach(line => {
+                    doc.text(line, margin, yPosition);
+                    yPosition += 8;
+                });
+                yPosition += 10;
+                
+                // Waypoints Table Header
+                doc.setFontSize(14);
+                doc.setFont("helvetica", "bold");
+                doc.text('Waypoint Details', margin, yPosition);
+                yPosition += 15;
+                
+                // Table headers
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "bold");
+                const headers = ['Leg', 'Dist (mi)', 'Duration', 'Pace', 'Elev +', 'Elev -', 'Cum Dist', 'Cum Time', 'Rest', 'Notes'];
+                const colWidths = [25, 18, 18, 18, 16, 16, 18, 18, 16, 47];
+                let xPos = margin;
+                
+                headers.forEach((header, i) => {
+                    doc.text(header, xPos, yPosition);
+                    xPos += colWidths[i];
+                });
+                yPosition += 8;
+                
+                // Draw line under headers
+                doc.line(margin, yPosition - 2, pageWidth - margin, yPosition - 2);
+                yPosition += 5;
+                
+                // Table data
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                
+                const showTime = hasValidTime || usingTargetTime;
+                let cumD = 0, cumT = 0, cumG = 0, cumL = 0;
+                
+                for (let i = 0; i < customLegs.length; i++) {
+                    const currentLeg = customLegs[i];
+                    const legD = currentLeg.distance;
+                    const legName = currentLeg.name || `Waypoint @ ${legD.toFixed(1)} mi`;
+                    
+                    let segD = 0, segT = 0, segG = 0, segL = 0;
+                    
+                    if (i > 0) {
+                        const prevLeg = customLegs[i-1];
+                        const segmentStats = calculateSegmentStats(prevLeg.distance, legD);
+                        segD = segmentStats.distance;
+                        segT = segmentStats.time;
+                        segG = segmentStats.elevGain;
+                        segL = segmentStats.elevLoss;
+                    }
+                    
+                    cumD += segD;
+                    cumT += segT + (restTimes[legD] || 0);
+                    cumG += segG;
+                    cumL += segL;
+                    
+                    // Check if we need a new page
+                    if (yPosition > 250) {
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    xPos = margin;
+                    const rowData = [
+                        legName.length > 12 ? legName.substring(0, 12) + '...' : legName,
+                        segD.toFixed(2),
+                        showTime ? formatTime(segT) : 'N/A',
+                        (showTime && segD > 0) ? formatPace(segT / segD) : 'N/A',
+                        segG.toFixed(0),
+                        segL.toFixed(0),
+                        cumD.toFixed(2),
+                        showTime ? formatTime(cumT) : 'N/A',
+                        formatTime(restTimes[legD] || 0),
+                        (waypointNotes[legD] || '').length > 20 ? (waypointNotes[legD] || '').substring(0, 20) + '...' : (waypointNotes[legD] || '')
+                    ];
+                    
+                    rowData.forEach((data, j) => {
+                        doc.text(String(data), xPos, yPosition);
+                        xPos += colWidths[j];
+                    });
+                    yPosition += 10;
+                }
+                
+                // Add elevation chart if available
+                console.log(`About to add chart - yPosition: ${yPosition}, trackPoints: ${trackPoints.length}`);
+                
+                if (trackPoints.length > 1) {
+                    // Add new page if we don't have enough space
+                    if (yPosition > 200) {
+                        console.log('Adding new page for chart');
+                        doc.addPage();
+                        yPosition = 20;
+                    }
+                    
+                    yPosition += 20;
+                    doc.setFontSize(14);
+                    doc.setFont("helvetica", "bold");
+                    doc.text('Elevation Profile', margin, yPosition);
+                    yPosition += 10;
+                    
+                    console.log(`Drawing chart at position: x=${margin}, y=${yPosition}, width=${contentWidth}, height=60`);
+                    console.log(`elevationChart exists: ${!!elevationChart}`);
+                    console.log(`existingChart element exists: ${!!document.getElementById('elevationChart')}`);
+                    
+                    // Try to use existing chart first
+                    const existingChart = document.getElementById('elevationChart');
+                    if (existingChart && elevationChart && false) { // Temporarily disable existing chart usage
+                        console.log('Trying to use existing chart');
+                        try {
+                            const chartImage = existingChart.toDataURL('image/jpeg', 0.8);
+                            console.log(`Chart image data length: ${chartImage.length}`);
+                            // Only use if we got a substantial image (more than 100 characters)
+                            if (chartImage.length > 100) {
+                                doc.addImage(chartImage, 'JPEG', margin, yPosition, contentWidth, 60);
+                                yPosition += 65;
+                                console.log('Successfully used existing chart');
+                            } else {
+                                console.log('Chart image too small, using fallback');
+                                addSimpleElevationChart(doc, margin, yPosition, contentWidth, 60);
+                                yPosition += 65;
+                            }
+                        } catch (chartError) {
+                            console.warn('Could not use existing chart, creating simple version:', chartError);
+                            // Fallback to simple drawing
+                            console.log('Calling addSimpleElevationChart as fallback');
+                            addSimpleElevationChart(doc, margin, yPosition, contentWidth, 60);
+                            yPosition += 65;
+                        }
+                    } else {
+                        console.log('Using custom chart drawing function');
+                        console.log('Calling addSimpleElevationChart directly');
+                        // Create a simple elevation chart directly
+                        addSimpleElevationChart(doc, margin, yPosition, contentWidth, 60);
+                        yPosition += 65;
+                    }
+                } else {
+                    console.log('Not enough track points for chart');
+                }
+                
+                // Save the PDF
+                const fileName = `${routeName.replace(/[^a-z0-9]/gi, '_')}_route_plan.pdf`;
+                doc.save(fileName);
+                showSuccess('PDF exported successfully!');
+                
+            } catch (error) {
+                console.error('PDF export error:', error);
+                showError(`Error exporting PDF: ${error.message}`);
+            }
+        }
+
+        function addSimpleElevationChart(doc, x, y, width, height) {
+            console.log(`addSimpleElevationChart called with: x=${x}, y=${y}, width=${width}, height=${height}`);
+            
+            try {
+                console.log('Step 1: Drawing background');
+                // Draw white background first
+                doc.setFillColor(255, 255, 255); // White background
+                doc.rect(x, y, width, height, 'F');
+                console.log('Background drawn successfully');
+                
+                console.log('Step 2: Drawing border');
+                // Draw border
+                doc.setDrawColor(0, 0, 0); // Black border
+                doc.setLineWidth(0.5);
+                doc.rect(x, y, width, height);
+                console.log('Border drawn successfully');
+                
+                // Find min and max elevations for scaling
+                const elevations = trackPoints.map(p => p.elevation);
+                const distances = trackPoints.map(p => p.cumulativeDistance);
+                const minElev = Math.min(...elevations);
+                const maxElev = Math.max(...elevations);
+                const maxDist = Math.max(...distances);
+                
+                console.log(`Chart data: minElev=${minElev}, maxElev=${maxElev}, maxDist=${maxDist}, points=${trackPoints.length}`);
+                
+                // Only draw if we have valid data
+                if (trackPoints.length > 1 && maxElev > minElev && maxDist > 0) {
+                    console.log('Step 3: Valid data found, drawing elevation line');
+                    
+                    // Draw elevation line using lines method
+                    doc.setDrawColor(0, 123, 255); // Blue line
+                    doc.setLineWidth(2);
+                    
+                    // Create path points for the elevation line
+                    const pathPoints = [];
+                    const chartMargin = 10; // Margin inside the chart area
+                    const chartWidth = width - (2 * chartMargin);
+                    const chartHeight = height - (2 * chartMargin);
+                    
+                    console.log(`Chart dimensions: chartWidth=${chartWidth}, chartHeight=${chartHeight}, margin=${chartMargin}`);
+                    
+                    // Sample fewer points to avoid potential issues (max 100 points for smooth line)
+                    const step = Math.max(1, Math.floor(trackPoints.length / 100));
+                    console.log(`Sampling every ${step} points`);
+                    
+                    for (let i = 0; i < trackPoints.length; i += step) {
+                        const point = trackPoints[i];
+                        const px = x + chartMargin + ((point.cumulativeDistance / maxDist) * chartWidth);
+                        const py = y + chartMargin + chartHeight - (((point.elevation - minElev) / (maxElev - minElev)) * chartHeight);
+                        pathPoints.push([px, py]);
+                    }
+                    
+                    // Ensure we include the last point
+                    if (trackPoints.length > 1) {
+                        const lastPoint = trackPoints[trackPoints.length - 1];
+                        const px = x + chartMargin + ((lastPoint.cumulativeDistance / maxDist) * chartWidth);
+                        const py = y + chartMargin + chartHeight - (((lastPoint.elevation - minElev) / (maxElev - minElev)) * chartHeight);
+                        pathPoints.push([px, py]);
+                    }
+                    
+                    console.log(`Created ${pathPoints.length} path points`);
+                    
+                    // Draw the elevation line using multiple line segments
+                    for (let i = 0; i < pathPoints.length - 1; i++) {
+                        try {
+                            doc.line(pathPoints[i][0], pathPoints[i][1], pathPoints[i + 1][0], pathPoints[i + 1][1]);
+                        } catch (lineError) {
+                            console.error(`Error drawing line segment ${i}:`, lineError);
+                            break;
+                        }
+                    }
+                    
+                    console.log(`Drew ${pathPoints.length - 1} line segments successfully`);
+                    
+                    console.log('Step 4: Drawing waypoint markers');
+                    // Add waypoint markers as small rectangles
+                    doc.setDrawColor(255, 0, 0); // Red markers
+                    doc.setFillColor(255, 0, 0);
+                    
+                    let markerCount = 0;
+                    customLegs.filter(leg => leg.isWaypoint).forEach(leg => {
+                        try {
+                            const point = findPointAtDistance(leg.distance);
+                            const px = x + chartMargin + ((leg.distance / maxDist) * chartWidth);
+                            const py = y + chartMargin + chartHeight - (((point.elevation - minElev) / (maxElev - minElev)) * chartHeight);
+                            
+                            // Draw small rectangle for waypoint
+                            doc.rect(px - 2, py - 2, 4, 4, 'F');
+                            markerCount++;
+                        } catch (markerError) {
+                            console.error('Error drawing waypoint marker:', markerError);
+                        }
+                    });
+                    
+                    console.log(`Drew ${markerCount} waypoint markers`);
+                } else {
+                    console.log('Step 3: Invalid or insufficient data for chart');
+                    // Draw a message if no valid data
+                    doc.setFontSize(10);
+                    doc.setTextColor(128, 128, 128);
+                    doc.text('No elevation data available', x + width/2, y + height/2, { align: 'center' });
+                }
+                
+                console.log('Step 5: Adding axis labels');
+                // Add axis labels
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+                
+                try {
+                    // X-axis label
+                    doc.text('Distance (miles)', x + width/2, y + height + 15, { align: 'center' });
+                    
+                    // Y-axis label
+                    doc.text('Elevation (ft)', x - 15, y + 10);
+                    
+                    // Add tick marks and labels for both axes
+                    if (trackPoints.length > 0 && maxElev > minElev) {
+                        const chartMargin = 10;
+                        const chartWidth = width - (2 * chartMargin);
+                        const chartHeight = height - (2 * chartMargin);
+                        
+                        // X-axis tick marks and labels (distance)
+                        const numXTicks = 5; // Number of tick marks along X-axis
+                        for (let i = 0; i <= numXTicks; i++) {
+                            const distanceValue = (maxDist / numXTicks) * i;
+                            const tickX = x + chartMargin + (chartWidth / numXTicks) * i;
+                            
+                            // Draw tick mark
+                            doc.setDrawColor(0, 0, 0);
+                            doc.setLineWidth(0.5);
+                            doc.line(tickX, y + height, tickX, y + height + 3);
+                            
+                            // Add label
+                            doc.text(distanceValue.toFixed(1), tickX, y + height + 10, { align: 'center' });
+                        }
+                        
+                        // Y-axis tick marks and labels (elevation)
+                        const numYTicks = 5; // Number of tick marks along Y-axis
+                        for (let i = 0; i <= numYTicks; i++) {
+                            const elevationValue = minElev + ((maxElev - minElev) / numYTicks) * i;
+                            const tickY = y + chartMargin + chartHeight - (chartHeight / numYTicks) * i;
+                            
+                            // Draw tick mark
+                            doc.setDrawColor(0, 0, 0);
+                            doc.setLineWidth(0.5);
+                            doc.line(x - 3, tickY, x, tickY);
+                            
+                            // Add label
+                            doc.text(elevationValue.toFixed(0), x - 5, tickY + 2, { align: 'right' });
+                        }
+                        
+                        // Add grid lines for better readability (optional light gray lines)
+                        doc.setDrawColor(220, 220, 220); // Light gray
+                        doc.setLineWidth(0.25);
+                        
+                        // Vertical grid lines
+                        for (let i = 1; i < numXTicks; i++) {
+                            const gridX = x + chartMargin + (chartWidth / numXTicks) * i;
+                            doc.line(gridX, y + chartMargin, gridX, y + chartMargin + chartHeight);
+                        }
+                        
+                        // Horizontal grid lines
+                        for (let i = 1; i < numYTicks; i++) {
+                            const gridY = y + chartMargin + (chartHeight / numYTicks) * i;
+                            doc.line(x + chartMargin, gridY, x + chartMargin + chartWidth, gridY);
+                        }
+                    }
+                    
+                    console.log('Axis labels and tick marks added successfully');
+                } catch (labelError) {
+                    console.error('Error adding labels:', labelError);
+                }
+                
+                console.log('Simple elevation chart completed successfully');
+                
+            } catch (error) {
+                console.error('Error creating simple elevation chart:', error);
+                
+                // Draw a simple error indicator
+                try {
+                    doc.setFillColor(255, 235, 235);
+                    doc.rect(x, y, width, height, 'F');
+                    doc.setDrawColor(255, 0, 0);
+                    doc.rect(x, y, width, height);
+                    
+                    doc.setFontSize(10);
+                    doc.setTextColor(255, 0, 0);
+                    doc.text('Chart Error', x + width/2, y + height/2, { align: 'center' });
+                } catch (errorRenderError) {
+                    console.error('Could not even render error message:', errorRenderError);
+                }
             }
         }
     </script>
