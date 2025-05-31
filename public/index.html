@@ -312,6 +312,7 @@
                 
                 <div class="leg-input">
                     <button class="btn" onclick="recalculateTable()">Recalculate Table</button>
+                    <button class="btn" onclick="exportTableToCSV()" style="margin-left: 10px;">Export to CSV</button>
                     <div style="margin-bottom: 10px;">
                         <label for="saveRouteNameInput">Route Name for Saving:</label>
                         <input type="text" id="saveRouteNameInput" placeholder="Enter route name (optional)" style="width: 100%; padding: 8px; box-sizing: border-box;">
@@ -1206,6 +1207,74 @@
                 
             } catch (error) {
                 showError(`Error deleting route: ${error.message}`);
+            }
+        }
+
+        function escapeCSV(str) {
+            if (str === null || str === undefined) {
+                return '';
+            }
+            str = String(str);
+            if (str.includes(',') || str.includes('\"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        async function exportTableToCSV(filename = 'route_plan.csv') {
+            const table = document.getElementById('resultsTable');
+            if (!table) {
+                showError('Results table not found.');
+                return;
+            }
+
+            let csv = [];
+            const headers = Array.from(table.querySelectorAll('thead th'))
+                .slice(0, -1) // Exclude the last "Actions" header
+                .map(header => escapeCSV(header.textContent.trim()));
+            csv.push(headers.join(','));
+
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const rowData = [];
+                const cells = row.querySelectorAll('td');
+                cells.forEach((cell, index) => {
+                    if (index < cells.length - 1) { // Exclude the last "Actions" cell
+                        let cellText = '';
+                        const inputElement = cell.querySelector('input[type="text"], input[type="number"], textarea');
+                        const selectElement = cell.querySelector('select'); // For dropdowns like rest time
+
+                        if (inputElement) {
+                            cellText = inputElement.value;
+                        } else if (selectElement) {
+                            cellText = selectElement.options[selectElement.selectedIndex].text; // Get text of selected option
+                        } else {
+                            cellText = cell.textContent.trim();
+                        }
+                        rowData.push(escapeCSV(cellText));
+                    }
+                });
+                if (rowData.length > 0) { // Ensure row is not empty after excluding action column
+                   csv.push(rowData.join(','));
+                }
+            });
+
+            const csvString = csv.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+
+            const link = document.createElement('a');
+            if (link.download !== undefined) { // Feature detection
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                showSuccess('Table exported to CSV successfully!');
+            } else {
+                showError('CSV export not supported by your browser.');
             }
         }
     </script>
