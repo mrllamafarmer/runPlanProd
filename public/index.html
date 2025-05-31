@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPX Route Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab.active {
+            border-bottom-color: #007bff;
+            font-weight: bold;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .upload-section {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            transition: border-color 0.3s;
+        }
+        
+        .upload-section:hover {
+            border-color: #007bff;
+        }
+        
+        .upload-section.drag-over {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .file-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .controls {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .leg-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        
+        .leg-input input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+        
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 2px;
+        }
+        
+        .btn:hover {
+            background: #0056b3;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+        }
+        
+        .btn-danger:hover {
+            background: #c82333;
+        }
+        
+        .btn-success {
+            background: #28a745;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            display: none;
+            font-size: 13px;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: right;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .distance-col {
+            text-align: left;
+        }
+        
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .loading {
+            color: #0066cc;
+            background: #cce7ff;
+            border: 1px solid #99d6ff;
+        }
+        
+        .add-leg-section {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        
+        .summary {
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .route-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .route-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .route-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .route-item:last-child {
+            border-bottom: none;
+        }
+        
+        .route-item h4 {
+            margin: 0 0 5px 0;
+            color: #007bff;
+        }
+        
+        .route-item small {
+            color: #666;
+        }
+        
+        .notes-input {
+            width: 100%;
+            min-height: 60px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GPX Route Analyzer</h1>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('analyzer')">Analyzer</button>
+            <button class="tab" onclick="switchTab('saved-routes')">Saved Routes</button>
+        </div>
+        
+        <!-- Analyzer Tab -->
+        <div id="analyzer-tab" class="tab-content active">
+            <div class="upload-section" id="uploadSection">
+                <h3>Upload GPX File</h3>
+                <p>Drag and drop your GPX file here or click to select</p>
+                <input type="file" id="gpxFile" accept=".gpx" />
+                <button class="btn" onclick="testWithSampleData()" style="margin-top: 10px;">Test with Sample Data</button>
+            </div>
+            
+            <div class="error" id="errorDiv"></div>
+            <div class="success" id="successDiv"></div>
+            
+            <div class="file-info" id="fileInfo">
+                <h4>File Information</h4>
+                <div id="fileDetails"></div>
+            </div>
+            
+            <div class="summary" id="summary">
+                <h4>Route Summary</h4>
+                <div id="summaryDetails"></div>
+            </div>
+            
+            <div class="controls" id="controls">
+                <div class="add-leg-section">
+                    <h4>Target Time (Optional)</h4>
+                    <div class="leg-input">
+                        <label>Target finish time:</label>
+                        <input type="number" id="targetHours" step="1" min="0" max="48" placeholder="HH" style="width: 60px;">
+                        <span>:</span>
+                        <input type="number" id="targetMinutes" step="1" min="0" max="59" placeholder="MM" style="width: 60px;">
+                        <span>:</span>
+                        <input type="number" id="targetSeconds" step="1" min="0" max="59" placeholder="SS" style="width: 60px;">
+                        <button class="btn btn-success" onclick="applyTargetTime()">Apply Target Time</button>
+                        <button class="btn" onclick="clearTargetTime()">Use GPX Time</button>
+                    </div>
+                    <div class="leg-input">
+                        <label>Pace slowdown factor:</label>
+                        <input type="number" id="slowdownFactor" step="1" min="-50" max="100" placeholder="0" style="width: 60px;" onchange="updateSlowdownFactor()">
+                        <span>% (+ slower at end, - faster at end)</span>
+                    </div>
+                    <div id="paceInfo" style="margin-top: 10px; font-style: italic; color: #666;"></div>
+                </div>
+                
+                <div class="add-leg-section">
+                    <h4>Add Custom Leg / Edit Leg</h4>
+                    <div class="leg-input">
+                        <label for="newLegName" style="margin-right: 5px;">Leg Name:</label>
+                        <input type="text" id="newLegName" placeholder="e.g., Water Stop" style="width: 150px; margin-right: 15px;">
+                        <label for="newLegDistance" style="margin-right: 5px;">Distance (miles):</label>
+                        <input type="number" id="newLegDistance" step="0.1" min="0" placeholder="e.g., 5.5" style="width: 100px;">
+                        <button class="btn btn-success" onclick="addCustomLeg()" id="addLegButton" style="margin-left: 10px;">Add Leg</button>
+                        <input type="hidden" id="editingLegDistance" value="">
+                    </div>
+                </div>
+                
+                <div class="leg-input">
+                    <button class="btn" onclick="recalculateTable()">Recalculate Table</button>
+                    <div style="margin-bottom: 10px;">
+                        <label for="saveRouteNameInput">Route Name for Saving:</label>
+                        <input type="text" id="saveRouteNameInput" placeholder="Enter route name (optional)" style="width: 100%; padding: 8px; box-sizing: border-box;">
+                    </div>
+                    <button class="btn btn-success" onclick="saveRoute()" id="saveBtn" style="display: none;">Save Route to Database</button>
+                </div>
+            </div>
+            
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th class="distance-col">Leg</th>
+                        <th>Distance (mi)</th>
+                        <th>Duration</th>
+                        <th>Leg Pace</th>
+                        <th>Elev Gain (ft)</th>
+                        <th>Elev Loss (ft)</th>
+                        <th>Cum Distance (mi)</th>
+                        <th>Cum Duration</th>
+                        <th>Cum Elev Gain (ft)</th>
+                        <th>Cum Elev Loss (ft)</th>
+                        <th>Rest Time</th>
+                        <th>Notes</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+        </div>
+        
+        <!-- Saved Routes Tab -->
+        <div id="saved-routes-tab" class="tab-content">
+            <h3>Saved Routes</h3>
+            <button class="btn" onclick="loadSavedRoutes()">Refresh List</button>
+            <div class="route-list" id="routeList">
+                <div style="padding: 20px; text-align: center; color: #666;">
+                    Click "Refresh List" to load saved routes
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let trackPoints = [];
+        let hasValidTime = false;
+        let customLegs = []; // Now stores objects: { distance: number, name: string, isWaypoint: boolean }
+        let targetTimeSeconds = null;
+        let usingTargetTime = false;
+        let restTimes = {};
+        let slowdownFactorPercent = 0;
+        let currentFilename = '';
+        let currentGpxData = '';
+        let waypointNotes = {};
+
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInput = document.getElementById('gpxFile');
+
+        uploadSection.addEventListener('dragover', e => { e.preventDefault(); uploadSection.classList.add('drag-over') });
+        uploadSection.addEventListener('dragleave', () => uploadSection.classList.remove('drag-over'));
+        uploadSection.addEventListener('drop', e => { e.preventDefault(); uploadSection.classList.remove('drag-over'); if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+        uploadSection.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`.tab`).parentNode.children[tabName === 'analyzer' ? 0 : 1].classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.gpx')) return showError('Please select a GPX file');
+            showError('Loading file...');
+            const reader = new FileReader();
+            reader.onload = e => {
+                currentGpxData = e.target.result;
+                currentFilename = file.name;
+                parseGPX(e.target.result, file.name);
+            };
+            reader.onerror = () => showError('Error reading file');
+            reader.readAsText(file);
+        }
+
+        function parseGPX(xmlString, filename) {
+            try {
+                const xmlDoc = new DOMParser().parseFromString(xmlString, 'text/xml');
+                if (xmlDoc.getElementsByTagName('parsererror').length)
+                    throw new Error('Invalid GPX file');
+                let trkpts = xmlDoc.getElementsByTagName('trkpt');
+                if (!trkpts.length) trkpts = xmlDoc.querySelectorAll('trkpt');
+                if (!trkpts.length) trkpts = xmlDoc.getElementsByTagNameNS('*','trkpt');
+                if (!trkpts.length) throw new Error('No track points found');
+                
+                trackPoints = [];
+                const times = new Set();
+                for (let i=0; i<trkpts.length; i++) {
+                    const p = trkpts[i];
+                    const lat = parseFloat(p.getAttribute('lat'));
+                    const lon = parseFloat(p.getAttribute('lon'));
+                    if (isNaN(lat)||isNaN(lon)) continue;
+                    let ele = 0;
+                    const e = p.getElementsByTagName('ele')[0];
+                    if (e && !isNaN(parseFloat(e.textContent))) ele = parseFloat(e.textContent) * 3.28084;
+                    let time = null;
+                    const t = p.getElementsByTagName('time')[0];
+                    if (t) {
+                        const d = new Date(t.textContent);
+                        if (!isNaN(d.getTime())) { time = d; times.add(d.getTime()); }
+                    }
+                    trackPoints.push({ lat, lon, elevation: ele, time, distance:0, cumulativeDistance:0 });
+                }
+                if (!trackPoints.length) throw new Error('No valid points');
+                hasValidTime = times.size>1;
+                calculateDistances();
+                showFileInfo(filename, trackPoints.length);
+            document.getElementById('saveRouteNameInput').value = filename; // Set save name input to new GPX filename
+                initializeTable();
+                document.getElementById('controls').style.display = 'block';
+                document.getElementById('resultsTable').style.display = 'table';
+                document.getElementById('saveBtn').style.display = 'inline-block';
+                hideError();
+            } catch (err) {
+                showError('Error parsing GPX: ' + err.message);
+            }
+        }
+
+        function calculateDistances() {
+            let tot=0;
+            for (let i=0; i<trackPoints.length; i++) {
+                if (i>0) {
+                    const d = haversineDistance(
+                        trackPoints[i-1].lat, trackPoints[i-1].lon,
+                        trackPoints[i].lat, trackPoints[i].lon
+                    );
+                    trackPoints[i].distance = d;
+                    tot += d;
+                }
+                trackPoints[i].cumulativeDistance = tot;
+            }
+        }
+
+        function haversineDistance(lat1,lon1,lat2,lon2) {
+            const R = 3959;
+            const dLat = (lat2-lat1)*Math.PI/180;
+            const dLon = (lon2-lon1)*Math.PI/180;
+            const a = Math.sin(dLat/2)**2 +
+                      Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) *
+                      Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+        }
+
+        function showFileInfo(filename,count) {
+            const total = trackPoints[trackPoints.length-1].cumulativeDistance.toFixed(2);
+            const gain = calculateTotalElevationGain().toFixed(0);
+            const loss = calculateTotalElevationLoss().toFixed(0);
+            document.getElementById('fileDetails').innerHTML = `
+                <strong>File:</strong> ${filename}<br>
+                <strong>Track Points:</strong> ${count.toLocaleString()}<br>
+                <strong>Total Distance:</strong> ${total} miles<br>
+                <strong>Time Data:</strong> ${hasValidTime?'Available':'Not available'}
+            `;
+            document.getElementById('summaryDetails').innerHTML = `
+                <strong>Total Distance:</strong> ${total} miles<br>
+                <strong>Total Elevation Gain:</strong> ${gain} ft<br>
+                <strong>Total Elevation Loss:</strong> ${loss} ft
+            `;
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('summary').style.display = 'block';
+        }
+
+        function calculateTotalElevationGain() {
+            let gain=0;
+            for (let i=1; i<trackPoints.length; i++) {
+                const d = trackPoints[i].elevation - trackPoints[i-1].elevation;
+                if (d>0) gain+=d;
+            }
+            return gain;
+        }
+
+        function calculateTotalElevationLoss() {
+            let loss=0;
+            for (let i=1; i<trackPoints.length; i++) {
+                const d = trackPoints[i].elevation - trackPoints[i-1].elevation;
+                if (d<0) loss+=Math.abs(d);
+            }
+            return loss;
+        }
+
+        function initializeTable() {
+            restTimes = {};
+            waypointNotes = {}; // This might be deprecated or used differently if leg names are distinct
+            const totalDistance = trackPoints[trackPoints.length-1].cumulativeDistance;
+            customLegs = [
+                { distance: 0, name: "Start", isWaypoint: true },
+                { distance: totalDistance, name: "Finish", isWaypoint: true }
+            ];
+            // Clear any editing state
+            document.getElementById('newLegName').value = '';
+            document.getElementById('newLegDistance').value = '';
+            document.getElementById('editingLegDistance').value = '';
+            document.getElementById('addLegButton').textContent = 'Add Leg';
+            recalculateTable();
+        }
+
+        function addCustomLeg() {
+            const legNameInput = document.getElementById('newLegName');
+            const legDistanceInput = document.getElementById('newLegDistance');
+            const editingDistanceInput = document.getElementById('editingLegDistance');
+            const addLegButton = document.getElementById('addLegButton');
+
+            const legName = legNameInput.value.trim();
+            const legDistance = parseFloat(legDistanceInput.value);
+            const totalRouteDistance = trackPoints[trackPoints.length-1].cumulativeDistance;
+
+            if (isNaN(legDistance) || legDistance <= 0 || legDistance >= totalRouteDistance) {
+                showError(`Enter a leg distance strictly between 0 and ${totalRouteDistance.toFixed(2)} miles.`);
+                return;
+            }
+
+            const editingDistStr = editingDistanceInput.value;
+            let existingLeg = null;
+            if (editingDistStr) {
+                const oldDistance = parseFloat(editingDistStr);
+                existingLeg = customLegs.find(leg => leg.distance === oldDistance && leg.isWaypoint);
+            }
+
+            // Check if another leg (not the one being edited) already exists at the new distance
+            const duplicateLeg = customLegs.find(leg => leg.distance === legDistance && leg.isWaypoint && leg !== existingLeg);
+            if (duplicateLeg) {
+                showError(`A leg already exists at ${legDistance.toFixed(2)} miles. Please choose a different distance or edit the existing leg.`);
+                return;
+            }
+
+            if (existingLeg) { // Editing existing leg
+                existingLeg.distance = legDistance;
+                existingLeg.name = legName || `Waypoint @ ${legDistance.toFixed(1)} mi`; // Default name if empty
+                // Note: waypointNotes and restTimes might need to be updated if distance changes
+                if (waypointNotes[parseFloat(editingDistStr)]) {
+                    waypointNotes[legDistance] = waypointNotes[parseFloat(editingDistStr)];
+                    delete waypointNotes[parseFloat(editingDistStr)];
+                }
+                if (restTimes[parseFloat(editingDistStr)]) {
+                    restTimes[legDistance] = restTimes[parseFloat(editingDistStr)];
+                    delete restTimes[parseFloat(editingDistStr)];
+                }
+            } else { // Adding new leg
+                customLegs.push({
+                    distance: legDistance,
+                    name: legName || `Waypoint @ ${legDistance.toFixed(1)} mi`, // Default name if empty
+                    isWaypoint: true
+                });
+            }
+
+            customLegs.sort((a, b) => a.distance - b.distance);
+
+            // Clear inputs and reset editing state
+            legNameInput.value = '';
+            legDistanceInput.value = '';
+            editingDistanceInput.value = '';
+            addLegButton.textContent = 'Add Leg';
+            hideError();
+            recalculateTable();
+        }
+
+        function removeLeg(distance) {
+            // Find the index of the leg to remove. Do not allow removal of Start/Finish.
+            const legIndex = customLegs.findIndex(leg => leg.distance === distance && leg.isWaypoint && leg.name !== 'Start' && leg.name !== 'Finish');
+
+            if (legIndex > 0 && legIndex < customLegs.length -1) { // Ensure it's not Start or Finish index
+                customLegs.splice(legIndex, 1);
+                delete waypointNotes[distance]; // Also remove associated notes and rest times
+                delete restTimes[distance];
+                
+                // If this leg was being edited, clear the edit form
+                const editingDistanceInput = document.getElementById('editingLegDistance');
+                if (parseFloat(editingDistanceInput.value) === distance) {
+                    document.getElementById('newLegName').value = '';
+                    document.getElementById('newLegDistance').value = '';
+                    editingDistanceInput.value = '';
+                    document.getElementById('addLegButton').textContent = 'Add Leg';
+                }
+                hideError();
+                recalculateTable();
+            } else {
+                showError('Cannot remove Start or Finish points.');
+            }
+        }
+
+        function recalculateTable() {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            let cumD = 0, cumT = 0, cumG = 0, cumL = 0;
+            const showTime = hasValidTime || usingTargetTime;
+
+            for (let i = 0; i < customLegs.length; i++) {
+                const currentLeg = customLegs[i];
+                const legD = currentLeg.distance;
+                const legName = currentLeg.name || (currentLeg.isWaypoint ? `Waypoint @ ${legD.toFixed(1)} mi` : (i === 0 ? 'Start' : 'Finish'));
+                
+                const isStart = (i === 0 && currentLeg.name === 'Start');
+                const isEnd = (i === customLegs.length - 1 && currentLeg.name === 'Finish');
+                const isCustomWaypoint = currentLeg.isWaypoint && !isStart && !isEnd;
+
+                let segD = 0, segT = 0, segG = 0, segL = 0;
+
+                if (i > 0) { // Calculate segment from previous leg to current leg
+                    const prevLeg = customLegs[i-1];
+                    const stats = calculateSegmentStats(prevLeg.distance, legD);
+                    segD = stats.distance;
+                    segT = stats.time;
+                    segG = stats.elevGain;
+                    segL = stats.elevLoss;
+                }
+
+                cumD += segD;
+                cumT += segT + (restTimes[legD] || 0);
+                cumG += segG;
+                cumL += segL;
+
+                const row = tbody.insertRow();
+                row.insertCell(0).innerHTML = legName; // Leg name
+                row.insertCell(1).innerHTML = segD.toFixed(2); // Distance
+                row.insertCell(2).innerHTML = showTime ? formatTime(segT) : 'N/A'; // Duration
+                row.insertCell(3).innerHTML = (showTime && segD > 0) ? formatPace(segT / segD) : 'N/A'; // Leg Pace
+                row.insertCell(4).innerHTML = segG.toFixed(0); // Elev Gain
+                row.insertCell(5).innerHTML = segL.toFixed(0); // Elev Loss
+                row.insertCell(6).innerHTML = cumD.toFixed(2); // Cumulative Distance
+                row.insertCell(7).innerHTML = showTime ? formatTime(cumT) : 'N/A'; // Cumulative Time
+                row.insertCell(8).innerHTML = cumG.toFixed(0); // Cumulative Gain
+                row.insertCell(9).innerHTML = cumL.toFixed(0); // Cumulative Loss
+
+                // Rest time inputs
+                const restCell = row.insertCell(10);
+                if (isCustomWaypoint || isEnd) { // Allow rest at custom waypoints and at the finish
+                    const rt = restTimes[legD] || 0;
+                    const m = Math.floor(rt / 60), s = rt % 60;
+                    restCell.innerHTML = `
+                        <input type="number" min="0" max="999" value="${m}"
+                               onchange="updateRestTime(${legD}, this)" style="width:45px;">:
+                        <input type="number" min="0" max="59" value="${s}"
+                               onchange="updateRestTime(${legD}, this)" style="width:35px;">
+                    `;
+                } else {
+                    restCell.innerHTML = '-';
+                }
+
+                // Notes
+                const notesCell = row.insertCell(11);
+                if (isCustomWaypoint || isEnd) { // Allow notes at custom waypoints and at the finish
+                    notesCell.innerHTML = `
+                        <textarea class="notes-input" 
+                                  onchange="updateWaypointNotes(${legD}, this.value)"
+                                  placeholder="Add notes...">${waypointNotes[legD] || ''}</textarea>
+                    `;
+                } else {
+                    notesCell.innerHTML = '-';
+                }
+
+                // Actions
+                const actionsCell = row.insertCell(12);
+                if (isCustomWaypoint) {
+                    actionsCell.innerHTML = 
+                        `<button class="btn btn-info btn-sm" onclick="editLeg(${legD})" style="margin-right: 5px;">Edit</button>` +
+                        `<button class="btn btn-danger btn-sm" onclick="removeLeg(${legD})">Remove</button>`;
+                } else {
+                    actionsCell.innerHTML = '-';
+                }
+            }
+        }
+
+        function editLeg(distance) {
+            const legToEdit = customLegs.find(leg => leg.distance === distance && leg.isWaypoint);
+            if (legToEdit) {
+                document.getElementById('newLegName').value = legToEdit.name.startsWith('Waypoint @') ? '' : legToEdit.name; // Don't prefill default name
+                document.getElementById('newLegDistance').value = legToEdit.distance;
+                document.getElementById('editingLegDistance').value = legToEdit.distance; // Store original distance for lookup
+                document.getElementById('addLegButton').textContent = 'Update Leg';
+                document.getElementById('newLegName').focus();
+            } else {
+                showError('Could not find the leg to edit.');
+            }
+        }
+
+        function updateWaypointNotes(distance, notes) {
+            waypointNotes[distance] = notes;
+        }
+
+        function calculateSegmentStats(startD, endD) {
+            const startP = findPointAtDistance(startD);
+            const endP   = findPointAtDistance(endD);
+            if (!startP || !endP) return {distance:0,time:0,elevGain:0,elevLoss:0};
+
+            const distance = endD - startD;
+            let time = 0;
+
+            if (usingTargetTime && targetTimeSeconds) {
+                const totalD = trackPoints[trackPoints.length-1].cumulativeDistance;
+                const totalRest = Object.values(restTimes).reduce((a,b)=>a+b,0);
+                const moving = targetTimeSeconds - totalRest;
+                if (slowdownFactorPercent === 0) {
+                    time = distance * (moving / totalD);
+                } else {
+                    time = calculateVariablePaceTime(startD, endD, totalD, moving);
+                }
+            } else if (hasValidTime && startP.time && endP.time) {
+                time = (endP.time.getTime() - startP.time.getTime()) / 1000;
+            }
+
+            let gain=0, loss=0;
+            for (let i=startP.index+1; i<=endP.index && i<trackPoints.length; i++) {
+                const d = trackPoints[i].elevation - trackPoints[i-1].elevation;
+                if (d>0) gain += d; else if (d<0) loss += Math.abs(d);
+            }
+            return {distance, time, elevGain:gain, elevLoss:loss};
+        }
+
+        function findPointAtDistance(td) {
+            if (td === 0) return {...trackPoints[0], index:0};
+            for (let i=0; i<trackPoints.length-1; i++) {
+                const cd0 = trackPoints[i].cumulativeDistance;
+                const cd1 = trackPoints[i+1].cumulativeDistance;
+                if (cd0 <= td && cd1 >= td) {
+                    const ratio = (td - cd0) / (cd1 - cd0);
+                    const lat = trackPoints[i].lat + ratio*(trackPoints[i+1].lat - trackPoints[i].lat);
+                    const lon = trackPoints[i].lon + ratio*(trackPoints[i+1].lon - trackPoints[i].lon);
+                    const elevation = trackPoints[i].elevation + ratio*(trackPoints[i+1].elevation - trackPoints[i].elevation);
+                    let time = null;
+                    if (hasValidTime && trackPoints[i].time && trackPoints[i+1].time) {
+                        const dt = trackPoints[i+1].time.getTime() - trackPoints[i].time.getTime();
+                        time = new Date(trackPoints[i].time.getTime() + ratio * dt);
+                    }
+                    return {lat, lon, elevation, time, cumulativeDistance:td, index:i};
+                }
+            }
+            return {...trackPoints[trackPoints.length-1], index: trackPoints.length-1};
+        }
+
+        function formatTime(sec) {
+            if (!sec) return '0:00:00';
+            const h = Math.floor(sec/3600);
+            const m = Math.floor((sec%3600)/60);
+            const s = Math.floor(sec%60);
+            return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function formatPace(secPerMile) {
+            const m = Math.floor(secPerMile/60);
+            const s = Math.round(secPerMile % 60);
+            return `${m}:${s.toString().padStart(2,'0')}`;
+        }
+
+        function showError(msg) {
+            const d = document.getElementById('errorDiv');
+            d.textContent = msg;
+            d.style.display = 'block';
+            d.className = msg.includes('Loading') ? 'error loading' : 'error';
+            document.getElementById('successDiv').style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            const d = document.getElementById('successDiv');
+            d.textContent = msg;
+            d.style.display = 'block';
+            document.getElementById('errorDiv').style.display = 'none';
+        }
+
+        function hideError() {
+            document.getElementById('errorDiv').style.display = 'none';
+        }
+
+        function applyTargetTime() {
+            const h = parseInt(document.getElementById('targetHours').value)||0;
+            const m = parseInt(document.getElementById('targetMinutes').value)||0;
+            const s = parseInt(document.getElementById('targetSeconds').value)||0;
+            if (h===0 && m===0 && s===0) {
+                return showError('Please enter a valid target time');
+            }
+            targetTimeSeconds = h*3600 + m*60 + s;
+            usingTargetTime = true;
+            updatePaceDisplay();
+            recalculateTable();
+            hideError();
+        }
+
+        function updatePaceDisplay() {
+            if (!usingTargetTime || !targetTimeSeconds) {
+                return document.getElementById('paceInfo').innerHTML = '';
+            }
+            const totalD = trackPoints[trackPoints.length-1].cumulativeDistance;
+            const overall = targetTimeSeconds / totalD;
+            const totalRest = Object.values(restTimes).reduce((a,b)=>a+b,0);
+            const moving = targetTimeSeconds - totalRest;
+            const avgMoving = moving / totalD;
+
+            let html = `Target overall pace: ${formatTime(overall)} per mile<br>`;
+            if (slowdownFactorPercent===0) {
+                html += `Moving pace: ${formatTime(avgMoving)} per mile (constant)<br>`;
+            } else {
+                const sf = slowdownFactorPercent/100;
+                const startPace = avgMoving / (1 + sf/2);
+                const endPace   = startPace * (1 + sf);
+                html += `Moving pace: ${formatTime(startPace)} to ${formatTime(endPace)} per mile<br>`;
+                html += `Average moving pace: ${formatTime(avgMoving)} per mile<br>`;
+            }
+            html += `Total rest time: ${formatTime(totalRest)}`;
+            document.getElementById('paceInfo').innerHTML = html;
+        }
+
+        function clearTargetTime() {
+            targetTimeSeconds = null;
+            usingTargetTime = false;
+            restTimes = {};
+            slowdownFactorPercent = 0;
+            ['targetHours','targetMinutes','targetSeconds','slowdownFactor'].forEach(id => document.getElementById(id).value='');
+            document.getElementById('paceInfo').innerHTML = '';
+            recalculateTable();
+        }
+
+        function testWithSampleData() {
+            const sample = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Test">
+  <trk><trkseg>
+    <trkpt lat="40.7128" lon="-74.0060"><ele>10</ele><time>2023-01-01T10:00:00Z</time></trkpt>
+    <trkpt lat="40.7138" lon="-74.0050"><ele>15</ele><time>2023-01-01T10:01:00Z</time></trkpt>
+    <trkpt lat="40.7148" lon="-74.0040"><ele>20</ele><time>2023-01-01T10:02:00Z</time></trkpt>
+    <trkpt lat="40.7158" lon="-74.0030"><ele>25</ele><time>2023-01-01T10:03:00Z</time></trkpt>
+    <trkpt lat="40.7168" lon="-74.0020"><ele>30</ele><time>2023-01-01T10:04:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>`;
+            currentGpxData = sample;
+            currentFilename = 'Sample_Test.gpx';
+            parseGPX(sample, 'Sample_Test.gpx');
+        }
+
+        function updateRestTime(distance, element) {
+            const row = element.closest('tr');
+            const inputs = row.querySelectorAll('input[type="number"]');
+            const [minInput, secInput] = Array.from(inputs).slice(-2);
+            const mins = parseInt(minInput.value)||0;
+            const secs = parseInt(secInput.value)||0;
+            const total = mins*60 + secs;
+            if (total===0) delete restTimes[distance];
+            else restTimes[distance] = total;
+            updatePaceDisplay();
+            recalculateTable();
+        }
+
+        function updateSlowdownFactor() {
+            const f = parseFloat(document.getElementById('slowdownFactor').value)||0;
+            slowdownFactorPercent = Math.max(-50, Math.min(100, f));
+            document.getElementById('slowdownFactor').value = slowdownFactorPercent;
+            if (usingTargetTime) {
+                updatePaceDisplay();
+                recalculateTable();
+            }
+        }
+
+        function calculateVariablePaceTime(startDistance, endDistance, totalDistance, totalMovingTime) {
+            const sf = slowdownFactorPercent / 100;
+            const basePace = totalMovingTime / totalDistance;
+            const startPace = basePace / (1 + sf/2);
+            const delta = endDistance - startDistance;
+            return startPace * delta
+                 + startPace * (sf / (2 * totalDistance))
+                             * (endDistance**2 - startDistance**2);
+        }
+
+        // Database functions
+        async function saveRoute() {
+            if (!trackPoints.length) {
+                showError('No route data to save');
+                return;
+            }
+
+            try {
+                // Prepare waypoints data
+                const waypoints = [];
+                let cumD = 0, cumT = 0, cumG = 0, cumL = 0;
+                
+                for (let i = 0; i < customLegs.length; i++) {
+                    const currentLeg = customLegs[i];
+                    const legD = currentLeg.distance;
+                    const legName = currentLeg.name;
+                    const isWaypoint = currentLeg.isWaypoint;
+
+                    // We only save actual waypoints (Start, Finish, and user-added points)
+                    // The table might display intermediate points derived from GPX data, but those aren't 'waypoints' to be saved explicitly here.
+                    // The backend will receive all trackPoints anyway.
+                    // We are interested in points that define legs or are explicit markers.
+                    if (!isWaypoint) continue; // Skip if not a designated waypoint to save (e.g. raw GPX points not marked as legs)
+
+                    const isStart = (i === 0 && legName === 'Start');
+                    
+                    // For the 'Start' point, we don't calculate segment stats from a 'previous' point.
+                    // Its details are more about the initial state.
+                    // However, the current structure saves waypoints *between* legs.
+                    // Let's adjust to save each customLeg that is a waypoint.
+
+                    let stats = { distance: 0, time: 0, elevGain: 0, elevLoss: 0 };
+                    let point = findPointAtDistance(legD);
+
+                    if (!isStart) {
+                        const prevLeg = customLegs.findLast(leg => leg.distance < legD && leg.isWaypoint);
+                        if (prevLeg) {
+                            stats = calculateSegmentStats(prevLeg.distance, legD);
+                        }
+                        // For the first actual leg (after Start), cumulative values are segment values.
+                        // For subsequent legs, they add up.
+                        if (waypoints.length > 0) {
+                            const lastWp = waypoints[waypoints.length-1];
+                            cumD = lastWp.cumulativeDistance + stats.distance;
+                            cumT = lastWp.cumulativeDurationWithRest + stats.time + (restTimes[legD] || 0);
+                            cumG = lastWp.cumulativeElevationGain + stats.elevGain;
+                            cumL = lastWp.cumulativeElevationLoss + stats.elevLoss;
+                        } else {
+                            cumD = stats.distance;
+                            cumT = stats.time + (restTimes[legD] || 0);
+                            cumG = stats.elevGain;
+                            cumL = stats.elevLoss;
+                        }
+                    } else { // For the 'Start' point
+                        cumD = 0;
+                        cumT = (restTimes[legD] || 0); // Rest at start?
+                        cumG = 0;
+                        cumL = 0;
+                        // 'point' for Start is already {lat, lon, elevation, time, cumulativeDistance:0, index:0}
+                    }
+                    
+                    waypoints.push({
+                        legName: legName, // Added legName
+                        distanceMiles: stats.distance, // This is segment distance to this waypoint
+                        cumulativeDistance: legD, // This is the waypoint's distance from start
+                        durationSeconds: stats.time, // Segment duration
+                        cumulativeDurationWithRest: cumT, // Cumulative time including rest at this waypoint
+                        legPaceSeconds: stats.distance > 0 ? stats.time / stats.distance : 0,
+                        elevationGain: stats.elevGain, // Segment gain
+                        elevationLoss: stats.elevLoss, // Segment loss
+                        cumulativeElevationGain: cumG,
+                        cumulativeElevationLoss: cumL,
+                        restTimeSeconds: restTimes[legD] || 0,
+                        notes: waypointNotes[legD] || '',
+                        latitude: point.lat,
+                        longitude: point.lon,
+                        elevation: point.elevation
+                        // leg_number could be i, but backend might regenerate it
+                    });
+                }
+
+                // Filter out the 'Start' waypoint if it's the only one and has no meaningful data other than being position 0.
+                // The backend expects waypoints to represent ends of legs.
+                // The current loop structure correctly creates waypoints for each leg end (including Finish).
+                // The 'Start' point (distance 0) is effectively the beginning of the first leg.
+                // The backend schema for waypoints implies they are markers *at the end* of a leg.
+                // So, the first waypoint saved should be the end of the first leg.
+                // Let's adjust the loop to reflect this more clearly.
+
+                // Re-thinking the waypoint saving logic to align with typical leg definitions:
+                // A waypoint marks the END of a leg.
+                // The 'Start' point (customLegs[0]) is the beginning of the first leg.
+                // The 'Finish' point (customLegs[customLegs.length-1]) is the end of the last leg.
+
+                const finalWaypoints = [];
+                let cumulativeDist = 0;
+                let cumulativeTimeWithRest = 0;
+                let cumulativeGain = 0;
+                let cumulativeLoss = 0;
+
+                for (let i = 0; i < customLegs.length; i++) {
+                    const currentLegMarker = customLegs[i];
+                    if (!currentLegMarker.isWaypoint) continue; // Should not happen with current logic but good check
+
+                    const pointData = findPointAtDistance(currentLegMarker.distance);
+                    let segmentStats = { distance: 0, time: 0, elevGain: 0, elevLoss: 0 };
+
+                    if (i > 0) {
+                        const previousLegMarker = customLegs[i-1]; // Assumes customLegs is sorted and dense with waypoints
+                        segmentStats = calculateSegmentStats(previousLegMarker.distance, currentLegMarker.distance);
+                        
+                        cumulativeDist += segmentStats.distance;
+                        cumulativeTimeWithRest += segmentStats.time + (restTimes[currentLegMarker.distance] || 0);
+                        cumulativeGain += segmentStats.elevGain;
+                        cumulativeLoss += segmentStats.elevLoss;
+                    } else { // For the Start point itself, if we decide to save it explicitly
+                        cumulativeTimeWithRest = (restTimes[currentLegMarker.distance] || 0); // Rest at start point
+                    }
+
+                    // Only save waypoints that are actual leg markers (ends of legs)
+                    // The 'Start' point is implicitly the beginning. The first waypoint saved is the end of the first leg.
+                    if (i > 0) { // Skip explicit save for 'Start' as a waypoint, it's the reference for the first leg
+                        finalWaypoints.push({
+                            legName: currentLegMarker.name,
+                            legNumber: finalWaypoints.length + 1, // Sequential leg number
+                            distanceMiles: segmentStats.distance,
+                            cumulativeDistance: cumulativeDist, // Or currentLegMarker.distance, should be same if calcs are right
+                            durationSeconds: segmentStats.time,
+                            legPaceSeconds: segmentStats.distance > 0 ? segmentStats.time / segmentStats.distance : 0,
+                            elevationGain: segmentStats.elevGain,
+                            elevationLoss: segmentStats.elevLoss,
+                            cumulativeElevationGain: cumulativeGain,
+                            cumulativeElevationLoss: cumulativeLoss,
+                            restTimeSeconds: restTimes[currentLegMarker.distance] || 0,
+                            notes: waypointNotes[currentLegMarker.distance] || '',
+                            latitude: pointData.lat,
+                            longitude: pointData.lon,
+                            elevation: pointData.elevation
+                        });
+                    }
+                }
+
+                let saveName = document.getElementById('saveRouteNameInput').value.trim();
+                if (!saveName) {
+                    saveName = currentFilename; // Default to original GPX filename if input is empty
+                }
+
+                const routeData = {
+                    filename: saveName,
+                    totalDistance: trackPoints[trackPoints.length - 1].cumulativeDistance,
+                    totalElevationGain: calculateTotalElevationGain(),
+                    totalElevationLoss: calculateTotalElevationLoss(),
+                    startTime: trackPoints[0].time ? trackPoints[0].time.toISOString() : null,
+                    targetTimeSeconds,
+                    slowdownFactorPercent,
+                    hasValidTime,
+                    usingTargetTime,
+                    gpxData: currentGpxData,
+                    waypoints: finalWaypoints, // Use the refined waypoints list
+                    trackPoints
+                };
+
+                showError('Saving route...');
+                const response = await fetch('/api/routes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(routeData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(`Route saved successfully! ID: ${result.routeId}`);
+                } else {
+                    showError(`Failed to save route: ${result.error}`);
+                }
+            } catch (error) {
+                showError(`Error saving route: ${error.message}`);
+            }
+        }
+
+        async function loadSavedRoutes() {
+            try {
+                const response = await fetch('/api/routes');
+                const routes = await response.json();
+                
+                const routeList = document.getElementById('routeList');
+                
+                if (routes.length === 0) {
+                    routeList.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No saved routes found</div>';
+                    return;
+                }
+                
+                routeList.innerHTML = routes.map(route => `
+                    <div class="route-item" onclick="loadRoute('${route.id}')">
+                        <h4>${route.filename}</h4>
+                        <small>
+                            Distance: ${route.total_distance ? route.total_distance.toFixed(2) : 'N/A'} miles | 
+                            Uploaded: ${new Date(route.upload_date).toLocaleDateString()} |
+                            Elevation: +${route.total_elevation_gain ? route.total_elevation_gain.toFixed(0) : '0'}/-${route.total_elevation_loss ? route.total_elevation_loss.toFixed(0) : '0'} ft
+                        </small>
+                        <div style="margin-top: 5px;">
+                            <button class="btn btn-danger" onclick="event.stopPropagation(); deleteRoute('${route.id}')" style="font-size: 12px; padding: 4px 8px;">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                document.getElementById('routeList').innerHTML = `<div style="padding: 20px; text-align: center; color: #dc3545;">Error loading routes: ${error.message}</div>`;
+            }
+        }
+
+        async function loadRoute(routeId) {
+            try {
+                const response = await fetch(`/api/routes/${routeId}`);
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    showError(`Failed to load route: ${data.error}`);
+                    return;
+                }
+                
+                // Switch to analyzer tab
+                switchTab('analyzer');
+                
+                // Load the route data back into the analyzer
+                const route = data.route;
+                currentFilename = route.filename;
+                currentGpxData = route.gpx_data;
+                
+                // Parse the GPX data again
+                // parseGPX will set trackPoints, calculate distances, and update UI including saveRouteNameInput
+                parseGPX(route.gpx_data, route.filename);
+                // Explicitly set the save name input after parseGPX might have reset it based on original GPX content
+                document.getElementById('saveRouteNameInput').value = route.filename; 
+                
+                // Restore target time and settings
+                if (route.using_target_time && route.target_time_seconds) {
+                    const hours = Math.floor(route.target_time_seconds / 3600);
+                    const minutes = Math.floor((route.target_time_seconds % 3600) / 60);
+                    const seconds = route.target_time_seconds % 60;
+                    
+                    document.getElementById('targetHours').value = hours;
+                    document.getElementById('targetMinutes').value = minutes;
+                    document.getElementById('targetSeconds').value = seconds;
+                    
+                    targetTimeSeconds = route.target_time_seconds;
+                    usingTargetTime = true;
+                }
+                
+                if (route.slowdown_factor_percent) {
+                    document.getElementById('slowdownFactor').value = route.slowdown_factor_percent;
+                    slowdownFactorPercent = route.slowdown_factor_percent;
+                }
+                
+                // Restore waypoints and notes
+                const totalRouteDistance = trackPoints[trackPoints.length-1].cumulativeDistance;
+                customLegs = [
+                    { distance: 0, name: "Start", isWaypoint: true }
+                ];
+                waypointNotes = {};
+                restTimes = {};
+                
+                data.waypoints.forEach(waypoint => {
+                    const distance = waypoint.cumulative_distance;
+                    // Ensure we don't duplicate start/finish if they are somehow in waypoint data from older saves
+                    if (distance > 0 && distance < totalRouteDistance) {
+                        customLegs.push({
+                            distance: distance,
+                            name: waypoint.leg_name || `Waypoint @ ${distance.toFixed(1)} mi`, // Use saved name or default
+                            isWaypoint: true
+                        });
+                    }
+                    if (waypoint.notes) {
+                        waypointNotes[distance] = waypoint.notes;
+                    }
+                    if (waypoint.rest_time_seconds) {
+                        restTimes[distance] = waypoint.rest_time_seconds;
+                    }
+                });
+
+                // Add Finish leg
+                customLegs.push({ distance: totalRouteDistance, name: "Finish", isWaypoint: true });
+                
+                // Remove duplicates just in case (e.g. if a waypoint was exactly at totalRouteDistance)
+                customLegs = customLegs.filter((leg, index, self) =>
+                    index === self.findIndex((l) => (
+                        l.distance === leg.distance
+                    ))
+                );
+
+                customLegs.sort((a, b) => a.distance - b.distance);
+                
+                updatePaceDisplay();
+                recalculateTable();
+                
+                showSuccess(`Route "${route.filename}" loaded successfully!`);
+                
+            } catch (error) {
+                showError(`Error loading route: ${error.message}`);
+            }
+        }
+
+        async function deleteRoute(routeId) {
+            if (!confirm('Are you sure you want to delete this route?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/routes/${routeId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    loadSavedRoutes(); // Refresh the list
+                    showSuccess('Route deleted successfully!');
+                } else {
+                    showError(`Failed to delete route: ${result.error}`);
+                }
+                
+            } catch (error) {
+                showError(`Error deleting route: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>

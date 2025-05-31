@@ -1,0 +1,12 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Application Data / Logs
+data/gpx_routes.db
+*.log
+
+# macOS
+.DS_Store
