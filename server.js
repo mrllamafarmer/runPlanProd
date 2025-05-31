@@ -319,6 +319,125 @@ app.delete('/api/routes/:id', (req, res) => {
     });
 });
 
+// Update an existing route with all data
+app.put('/api/routes/:id', (req, res) => {
+    const routeId = req.params.id;
+    const {
+        filename,
+        totalDistance,
+        totalElevationGain,
+        totalElevationLoss,
+        startTime,
+        targetTimeSeconds,
+        slowdownFactorPercent,
+        hasValidTime,
+        usingTargetTime,
+        gpxData,
+        waypoints,
+        trackPoints
+    } = req.body;
+
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+
+        // Update route
+        db.run(`UPDATE routes SET
+            filename = ?, total_distance = ?, total_elevation_gain = ?, total_elevation_loss = ?,
+            start_time = ?, target_time_seconds = ?, slowdown_factor_percent = ?, has_valid_time = ?,
+            using_target_time = ?, gpx_data = ?
+        WHERE id = ?`,
+        [filename, totalDistance, totalElevationGain, totalElevationLoss,
+         startTime, targetTimeSeconds, slowdownFactorPercent, hasValidTime,
+         usingTargetTime, gpxData, routeId],
+        function(err) {
+            if (err) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: err.message });
+            }
+
+            if (this.changes === 0) {
+                db.run('ROLLBACK');
+                return res.status(404).json({ error: 'Route not found' });
+            }
+
+            // Delete existing waypoints and track points
+            db.run('DELETE FROM waypoints WHERE route_id = ?', [routeId], function(err) {
+                if (err) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: err.message });
+                }
+
+                db.run('DELETE FROM track_points WHERE route_id = ?', [routeId], function(err) {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        return res.status(500).json({ error: err.message });
+                    }
+
+                    // Insert new waypoints
+                    if (waypoints && waypoints.length > 0) {
+                        const waypointStmt = db.prepare(`INSERT INTO waypoints (
+                            id, route_id, leg_number, leg_name, distance_miles, cumulative_distance,
+                            duration_seconds, leg_pace_seconds, elevation_gain, elevation_loss,
+                            cumulative_elevation_gain, cumulative_elevation_loss, rest_time_seconds,
+                            notes, latitude, longitude, elevation
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+                        waypoints.forEach((waypoint) => {
+                            waypointStmt.run([
+                                uuidv4(), 
+                                routeId, 
+                                waypoint.legNumber,
+                                waypoint.legName || `Leg ${waypoint.legNumber}`,
+                                waypoint.distanceMiles,
+                                waypoint.cumulativeDistance, 
+                                waypoint.durationSeconds,
+                                waypoint.legPaceSeconds, 
+                                waypoint.elevationGain,
+                                waypoint.elevationLoss, 
+                                waypoint.cumulativeElevationGain,
+                                waypoint.cumulativeElevationLoss, 
+                                waypoint.restTimeSeconds || 0,
+                                waypoint.notes || '', 
+                                waypoint.latitude, 
+                                waypoint.longitude,
+                                waypoint.elevation
+                            ]);
+                        });
+                        waypointStmt.finalize();
+                    }
+
+                    // Insert new track points
+                    if (trackPoints && trackPoints.length > 0) {
+                        const trackStmt = db.prepare(`INSERT INTO track_points (
+                            id, route_id, point_number, latitude, longitude, elevation,
+                            timestamp, distance_from_start, cumulative_distance
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+                        trackPoints.forEach((point, index) => {
+                            let isoTimestamp = null;
+                            if (point.time) {
+                                const dateObj = new Date(point.time);
+                                if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
+                                    isoTimestamp = dateObj.toISOString();
+                                }
+                            }
+                            trackStmt.run([
+                                uuidv4(), routeId, index, point.lat, point.lon,
+                                point.elevation, isoTimestamp,
+                                point.distance, point.cumulativeDistance
+                            ]);
+                        });
+                        trackStmt.finalize();
+                    }
+
+                    db.run('COMMIT');
+                    res.json({ routeId, message: 'Route updated successfully' });
+                });
+            });
+        });
+    });
+});
+
 // Serve the main HTML file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

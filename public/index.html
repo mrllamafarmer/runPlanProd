@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPX Route Analyzer</title>
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -244,6 +250,53 @@
             padding: 5px;
             font-size: 12px;
         }
+        
+        .visualization-section {
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .map-container {
+            height: 400px;
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-container {
+            height: 300px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        .viz-tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
+        
+        .viz-tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .viz-tab.active {
+            border-bottom-color: #007bff;
+            font-weight: bold;
+        }
+        
+        .viz-content {
+            display: none;
+        }
+        
+        .viz-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -275,6 +328,25 @@
             <div class="summary" id="summary">
                 <h4>Route Summary</h4>
                 <div id="summaryDetails"></div>
+            </div>
+            
+            <!-- Visualization Section -->
+            <div class="visualization-section" id="visualizationSection">
+                <h4>Route Visualization</h4>
+                <div class="viz-tabs">
+                    <button class="viz-tab active" onclick="switchVizTab('map')">Map View</button>
+                    <button class="viz-tab" onclick="switchVizTab('elevation')">Elevation Profile</button>
+                </div>
+                
+                <div id="map-viz" class="viz-content active">
+                    <div id="routeMap" class="map-container"></div>
+                </div>
+                
+                <div id="elevation-viz" class="viz-content">
+                    <div class="chart-container">
+                        <canvas id="elevationChart"></canvas>
+                    </div>
+                </div>
             </div>
             
             <div class="controls" id="controls">
@@ -316,6 +388,9 @@
                     <div style="margin-bottom: 10px;">
                         <label for="saveRouteNameInput">Route Name for Saving:</label>
                         <input type="text" id="saveRouteNameInput" placeholder="Enter route name (optional)" style="width: 100%; padding: 8px; box-sizing: border-box;">
+                    </div>
+                    <div id="editingIndicator" style="display: none; margin-bottom: 10px; padding: 8px; background-color: #e7f3ff; border: 1px solid #b8daff; border-radius: 4px; color: #004085; font-size: 14px;">
+                        📝 <strong>Editing existing route</strong> - Changes will update the saved route
                     </div>
                     <button class="btn btn-success" onclick="saveRoute()" id="saveBtn" style="display: none;">Save Route to Database</button>
                 </div>
@@ -366,6 +441,13 @@
         let currentFilename = '';
         let currentGpxData = '';
         let waypointNotes = {};
+        let currentRouteId = null; // Track if we're editing an existing route
+        
+        // Visualization variables
+        let routeMap = null;
+        let elevationChart = null;
+        let routePolyline = null;
+        let waypointMarkers = [];
 
         const uploadSection = document.getElementById('uploadSection');
         const fileInput = document.getElementById('gpxFile');
@@ -382,6 +464,160 @@
             
             document.querySelector(`.tab`).parentNode.children[tabName === 'analyzer' ? 0 : 1].classList.add('active');
             document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        function switchVizTab(tabName) {
+            document.querySelectorAll('.viz-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.viz-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`[onclick="switchVizTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`${tabName}-viz`).classList.add('active');
+            
+            // Initialize map when switching to map tab
+            if (tabName === 'map' && !routeMap && trackPoints.length > 0) {
+                setTimeout(initializeMap, 100); // Small delay to ensure container is visible
+            }
+        }
+
+        function initializeMap() {
+            if (!trackPoints.length) return;
+            
+            const mapContainer = document.getElementById('routeMap');
+            if (!mapContainer) return;
+            
+            // Initialize map centered on the first track point
+            const firstPoint = trackPoints[0];
+            routeMap = L.map('routeMap').setView([firstPoint.lat, firstPoint.lon], 13);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(routeMap);
+            
+            updateMapVisualization();
+        }
+
+        function updateMapVisualization() {
+            if (!routeMap || !trackPoints.length) return;
+            
+            // Clear existing route and markers
+            if (routePolyline) {
+                routeMap.removeLayer(routePolyline);
+            }
+            waypointMarkers.forEach(marker => routeMap.removeLayer(marker));
+            waypointMarkers = [];
+            
+            // Create route polyline
+            const routeCoords = trackPoints.map(point => [point.lat, point.lon]);
+            routePolyline = L.polyline(routeCoords, {
+                color: '#007bff',
+                weight: 4,
+                opacity: 0.8
+            }).addTo(routeMap);
+            
+            // Add waypoint markers
+            customLegs.filter(leg => leg.isWaypoint).forEach((leg, index) => {
+                const point = findPointAtDistance(leg.distance);
+                const isStart = leg.name === 'Start';
+                const isFinish = leg.name === 'Finish';
+                
+                let markerColor = '#28a745'; // Default green
+                if (isStart) markerColor = '#007bff'; // Blue for start
+                else if (isFinish) markerColor = '#dc3545'; // Red for finish
+                
+                const marker = L.circleMarker([point.lat, point.lon], {
+                    radius: 8,
+                    fillColor: markerColor,
+                    color: 'white',
+                    weight: 2,
+                    fillOpacity: 0.8
+                }).addTo(routeMap);
+                
+                // Add popup with waypoint info
+                const popupContent = `
+                    <b>${leg.name}</b><br>
+                    Distance: ${leg.distance.toFixed(2)} mi<br>
+                    Elevation: ${point.elevation.toFixed(0)} ft
+                `;
+                marker.bindPopup(popupContent);
+                
+                waypointMarkers.push(marker);
+            });
+            
+            // Fit map to route bounds
+            if (routePolyline) {
+                routeMap.fitBounds(routePolyline.getBounds(), { padding: [20, 20] });
+            }
+        }
+
+        function initializeElevationChart() {
+            const ctx = document.getElementById('elevationChart').getContext('2d');
+            
+            if (elevationChart) {
+                elevationChart.destroy();
+            }
+            
+            const distances = trackPoints.map(point => point.cumulativeDistance);
+            const elevations = trackPoints.map(point => point.elevation);
+            
+            elevationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: distances,
+                    datasets: [{
+                        label: 'Elevation (ft)',
+                        data: elevations,
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Distance (miles)'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            title: {
+                                display: true,
+                                text: 'Elevation (feet)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                title: function(context) {
+                                    return `Distance: ${context[0].label} miles`;
+                                },
+                                label: function(context) {
+                                    return `Elevation: ${context.parsed.y.toFixed(0)} ft`;
+                                }
+                            }
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
         }
 
         function handleFile(file) {
@@ -429,11 +665,37 @@
                 hasValidTime = times.size>1;
                 calculateDistances();
                 showFileInfo(filename, trackPoints.length);
-            document.getElementById('saveRouteNameInput').value = filename; // Set save name input to new GPX filename
+                document.getElementById('saveRouteNameInput').value = filename; // Set save name input to new GPX filename
+                
+                // Reset route editing state when loading new GPX
+                currentRouteId = null;
+                updateSaveButtonText();
+                
+                // Reset visualization variables
+                if (routeMap) {
+                    routeMap.remove();
+                    routeMap = null;
+                }
+                if (elevationChart) {
+                    elevationChart.destroy();
+                    elevationChart = null;
+                }
+                routePolyline = null;
+                waypointMarkers = [];
+                
                 initializeTable();
+                
                 document.getElementById('controls').style.display = 'block';
                 document.getElementById('resultsTable').style.display = 'table';
                 document.getElementById('saveBtn').style.display = 'inline-block';
+                document.getElementById('visualizationSection').style.display = 'block';
+                
+                // Initialize visualizations
+                setTimeout(() => {
+                    initializeMap();
+                    initializeElevationChart();
+                }, 100);
+                
                 hideError();
             } catch (err) {
                 showError('Error parsing GPX: ' + err.message);
@@ -682,6 +944,10 @@
                     actionsCell.innerHTML = '-';
                 }
             }
+            
+            // Update visualizations if they exist
+            if (routeMap) updateMapVisualization();
+            if (document.getElementById('elevationChart')) initializeElevationChart();
         }
 
         function editLeg(distance) {
@@ -782,6 +1048,21 @@
 
         function hideError() {
             document.getElementById('errorDiv').style.display = 'none';
+        }
+
+        function updateSaveButtonText() {
+            const saveBtn = document.getElementById('saveBtn');
+            const editingIndicator = document.getElementById('editingIndicator');
+            
+            if (currentRouteId) {
+                saveBtn.textContent = 'Update Route in Database';
+                saveBtn.className = 'btn btn-success';
+                editingIndicator.style.display = 'block';
+            } else {
+                saveBtn.textContent = 'Save Route to Database';
+                saveBtn.className = 'btn btn-success';
+                editingIndicator.style.display = 'none';
+            }
         }
 
         function applyTargetTime() {
@@ -1119,6 +1400,10 @@
                 // Explicitly set the save name input after parseGPX might have reset it based on original GPX content
                 document.getElementById('saveRouteNameInput').value = route.filename; 
                 
+                // Update the route ID again since parseGPX resets it
+                currentRouteId = routeId;
+                updateSaveButtonText();
+                
                 // Restore target time and settings
                 if (route.using_target_time && route.target_time_seconds) {
                     const hours = Math.floor(route.target_time_seconds / 3600);
@@ -1178,6 +1463,12 @@
                 
                 updatePaceDisplay();
                 recalculateTable();
+                
+                // Update visualizations
+                setTimeout(() => {
+                    if (routeMap) updateMapVisualization();
+                    if (document.getElementById('elevationChart')) initializeElevationChart();
+                }, 100);
                 
                 showSuccess(`Route "${route.filename}" loaded successfully!`);
                 
