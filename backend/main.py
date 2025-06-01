@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Request, Depends
+from fastapi import FastAPI, HTTPException, status, Request, Depends, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -18,7 +18,8 @@ from database import (
 from models import (
     UserCreate, UserLogin, UserResponse, User, PasswordChange,
     RouteCreate, RouteUpdate, WaypointCreate, WaypointUpdate,
-    RouteData, RouteResponse, WaypointNotesUpdate, RouteListItem, RouteDetail
+    RouteData, RouteResponse, WaypointNotesUpdate, RouteListItem, RouteDetail,
+    GPXUploadResponse
 )
 from auth import auth_manager
 from exceptions import (
@@ -181,23 +182,15 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Authentication Routes
 
-@app.post("/api/auth/register", response_model=UserResponse)
-async def register(user_data: UserCreate):
-    """Register a new user"""
-    logger.info(f"User registration attempt: {user_data.username}")
-    
-    try:
-        result = auth_manager.register_user(user_data)
-        logger.info(f"User registered successfully: {user_data.username}")
-        return result
-    except (ValidationError, AuthenticationError):
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error during registration: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed"
-        )
+# REGISTRATION DISABLED - Admin users only
+# @app.post("/api/auth/register", response_model=UserResponse)
+# async def register(user_data: UserCreate):
+#     """Register a new user - DISABLED FOR SECURITY"""
+#     logger.info(f"Registration attempt blocked: {user_data.username}")
+#     raise HTTPException(
+#         status_code=status.HTTP_403_FORBIDDEN,
+#         detail="Registration is disabled. Contact administrator."
+#     )
 
 @app.post("/api/auth/login", response_model=UserResponse)
 async def login(login_data: UserLogin):
@@ -254,6 +247,57 @@ async def change_password(
         )
 
 # Route Management API (Updated for Multi-user)
+
+@app.post("/api/routes/upload", response_model=GPXUploadResponse)
+async def upload_gpx_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload and process a GPX file"""
+    logger.info(f"GPX file upload for user {current_user.username}: {file.filename}")
+    
+    if not file.filename:
+        raise ValidationError("No file provided")
+    
+    if not file.filename.lower().endswith('.gpx'):
+        raise ValidationError("File must be a GPX file")
+    
+    try:
+        # Read file content
+        content = await file.read()
+        gpx_content = content.decode('utf-8')
+        
+        # Import GPX parsing utilities
+        from utils.gpx_processor import process_gpx_content
+        
+        # Process the GPX file
+        start_time = time.time()
+        route_data = process_gpx_content(gpx_content, file.filename)
+        processing_time = time.time() - start_time
+        
+        logger.info(f"GPX processing result: {len(route_data.get('trackPoints', []))} track points, {len(route_data.get('waypoints', []))} waypoints")
+        
+        # Save to database
+        route_id = save_route_data(current_user.id, route_data)
+        
+        logger.info(f"Successfully processed and saved GPX file {file.filename} as route {route_id}")
+        
+        return GPXUploadResponse(
+            route_id=route_id,
+            route_name=route_data['filename'],
+            original_points=len(route_data['trackPoints']),
+            optimized_points=len(route_data['trackPoints']),  # TODO: Implement optimization
+            compression_ratio=1.0,  # TODO: Calculate actual compression
+            total_distance_meters=route_data['totalDistance'],
+            total_elevation_gain_meters=route_data['totalElevationGain'],
+            processing_time_seconds=processing_time
+        )
+        
+    except ValidationError:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing GPX file {file.filename}: {e}")
+        raise GPXAnalyzerException(f"Failed to process GPX file: {str(e)}")
 
 @app.post("/api/routes", response_model=RouteResponse)
 async def create_route(

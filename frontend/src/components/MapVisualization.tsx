@@ -34,6 +34,13 @@ export default function MapVisualization({
   useEffect(() => {
     if (!mapRef.current || trackPoints.length === 0) return;
 
+    console.log('MapVisualization - waypoints received:', waypoints);
+    
+    // Debug alert to see if this code is running at all
+    if (waypoints && waypoints.length > 0) {
+      alert(`DEBUG: Received ${waypoints.length} waypoints. First waypoint: ${JSON.stringify(waypoints[0])}`);
+    }
+
     // Initialize map if it doesn't exist
     if (!mapInstanceRef.current) {
       mapInstanceRef.current = L.map(mapRef.current, {
@@ -99,33 +106,73 @@ export default function MapVisualization({
     // Add start marker
     if (trackPoints.length > 0) {
       const startPoint = trackPoints[0];
-      const startMarker = L.marker([startPoint.lat, startPoint.lon], { icon: startIcon })
-        .bindPopup('<strong>Start</strong>');
-      routeLayerRef.current.addLayer(startMarker);
+      if (startPoint && typeof startPoint.lat === 'number' && typeof startPoint.lon === 'number') {
+        const startMarker = L.marker([startPoint.lat, startPoint.lon], { icon: startIcon })
+          .bindPopup('<strong>Start</strong>');
+        routeLayerRef.current.addLayer(startMarker);
+      } else {
+        console.warn('Invalid start point coordinates:', startPoint);
+      }
     }
 
     // Add end marker
     if (trackPoints.length > 1) {
       const endPoint = trackPoints[trackPoints.length - 1];
-      const endMarker = L.marker([endPoint.lat, endPoint.lon], { icon: endIcon })
-        .bindPopup('<strong>End</strong>');
-      routeLayerRef.current.addLayer(endMarker);
+      if (endPoint && typeof endPoint.lat === 'number' && typeof endPoint.lon === 'number') {
+        const endMarker = L.marker([endPoint.lat, endPoint.lon], { icon: endIcon })
+          .bindPopup('<strong>End</strong>');
+        routeLayerRef.current.addLayer(endMarker);
+      } else {
+        console.warn('Invalid end point coordinates:', endPoint);
+      }
     }
 
-    // Add waypoint markers
-    waypoints.forEach((waypoint, index) => {
-      const waypointMarker = L.marker([waypoint.latitude, waypoint.longitude], { icon: waypointIcon })
-        .bindPopup(
-          `<div class="waypoint-popup">
-            <strong>Waypoint ${index + 1}</strong><br/>
-            ${waypoint.legName || `Leg ${waypoint.legNumber}`}<br/>
-            Distance: ${waypoint.distanceMiles.toFixed(2)} mi<br/>
-            Elevation: ${waypoint.elevation.toFixed(0)} ft
-            ${waypoint.notes ? `<br/>Notes: ${waypoint.notes}` : ''}
-          </div>`
-        );
-      routeLayerRef.current?.addLayer(waypointMarker);
-    });
+    // Add waypoint markers with bulletproof error handling
+    if (waypoints && Array.isArray(waypoints)) {
+      waypoints.forEach((waypoint, index) => {
+        try {
+          // Comprehensive validation
+          if (!waypoint) {
+            console.warn(`Waypoint ${index} is null/undefined`);
+            return;
+          }
+          
+          const lat = Number(waypoint.latitude);
+          const lon = Number(waypoint.longitude);
+          
+          if (!isFinite(lat) || !isFinite(lon)) {
+            console.warn(`Waypoint ${index} has invalid coordinates:`, { lat, lon, waypoint });
+            return;
+          }
+          
+          if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+            console.warn(`Waypoint ${index} coordinates out of valid range:`, { lat, lon });
+            return;
+          }
+          
+          // Create marker with validated coordinates
+          const waypointMarker = L.marker([lat, lon], { icon: waypointIcon })
+            .bindPopup(
+              `<div class="waypoint-popup">
+                <strong>Waypoint ${index + 1}</strong><br/>
+                ${waypoint.legName || `Leg ${waypoint.legNumber || index}`}<br/>
+                Distance: ${Number(waypoint.distanceMiles || 0).toFixed(2)} mi<br/>
+                Elevation: ${Number(waypoint.elevation || 0).toFixed(0)} ft
+                ${waypoint.notes ? `<br/>Notes: ${waypoint.notes}` : ''}
+              </div>`
+            );
+          
+          if (routeLayerRef.current) {
+            routeLayerRef.current.addLayer(waypointMarker);
+          }
+          
+        } catch (error) {
+          console.error(`Error creating waypoint marker ${index}:`, error, waypoint);
+        }
+      });
+    }
+    
+    console.log('Waypoint markers created successfully!');
 
     // Fit map to route bounds
     if (routeCoordinates.length > 0) {

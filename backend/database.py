@@ -9,6 +9,7 @@ import os
 import json
 import psycopg2
 import psycopg2.extras
+import hashlib
 from contextlib import contextmanager
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
@@ -118,6 +119,16 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
     """
     try:
         with get_db_cursor() as cursor:
+            # Handle both API format ('name') and GPX format ('filename')
+            route_name = route_data.get('name') or route_data.get('filename', 'Unnamed Route')
+            
+            # Handle distance - could be in meters (GPX) or kilometers (API)
+            total_distance = route_data.get('totalDistance', 0)
+            if total_distance > 1000:  # Assume it's in meters if > 1000
+                total_distance_meters = total_distance
+            else:  # Assume it's in kilometers
+                total_distance_meters = total_distance * 1000
+            
             cursor.execute("""
                 INSERT INTO routes (
                     user_id, name, description, total_distance_meters,
@@ -126,33 +137,177 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                 RETURNING id
             """, (
                 user_id,
-                route_data.get('name', 'Unnamed Route'),
+                route_name,
                 route_data.get('description'),
-                route_data.get('totalDistance', 0) * 1000,  # Convert km to meters
+                total_distance_meters,
                 route_data.get('totalElevationGain', 0),
                 route_data.get('targetTimeSeconds', 0),
                 route_data.get('is_public', False)
             ))
             
-            route_id = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            route_id = result['id'] if result else None
+            
+            if not route_id:
+                raise DatabaseError("Failed to create route - no ID returned")
             
             # Save waypoints if provided
             waypoints = route_data.get('waypoints', [])
+            start_waypoint_id = None
+            end_waypoint_id = None
+            
             for i, waypoint in enumerate(waypoints):
+                # Handle both formats for waypoint data
+                waypoint_name = (waypoint.get('name') or 
+                               waypoint.get('legName') or 
+                               f'Waypoint {i+1}')
+                
                 cursor.execute("""
                     INSERT INTO waypoints (
                         route_id, name, latitude, longitude, elevation_meters,
                         order_index, waypoint_type
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
                 """, (
                     route_id,
-                    waypoint.get('legName', f'Waypoint {i+1}'),
+                    waypoint_name,
                     waypoint.get('latitude'),
                     waypoint.get('longitude'),
                     waypoint.get('elevation'),
                     i,
                     'start' if i == 0 else ('finish' if i == len(waypoints)-1 else 'checkpoint')
                 ))
+                
+                waypoint_result = cursor.fetchone()
+                if i == 0:
+                    start_waypoint_id = waypoint_result['id'] if waypoint_result else None
+                elif i == len(waypoints) - 1:
+                    end_waypoint_id = waypoint_result['id'] if waypoint_result else None
+            
+            # Save track points if provided
+            track_points = route_data.get('trackPoints', [])
+            logger.info(f"Processing {len(track_points)} track points for route {route_id}")
+            if track_points:
+                # Create a single route segment for the entire route if we have waypoints
+                route_segment_id = None
+                logger.info(f"Start waypoint ID: {start_waypoint_id}, End waypoint ID: {end_waypoint_id}")
+                if start_waypoint_id and end_waypoint_id:
+                    logger.info("Creating route segment between existing waypoints")
+                    cursor.execute("""
+                        INSERT INTO route_segments (
+                            route_id, from_waypoint_id, to_waypoint_id,
+                            distance_meters, elevation_gain_meters, elevation_loss_meters
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        route_id,
+                        start_waypoint_id,
+                        end_waypoint_id,
+                        total_distance_meters,
+                        route_data.get('totalElevationGain', 0),
+                        route_data.get('totalElevationLoss', 0)
+                    ))
+                    
+                    segment_result = cursor.fetchone()
+                    route_segment_id = segment_result['id'] if segment_result else None
+                    logger.info(f"Created route segment with ID: {route_segment_id}")
+                
+                # If we don't have waypoints or segment creation failed, create default waypoints
+                if not route_segment_id and track_points:
+                    logger.info("Creating default waypoints from track points")
+                    # Create start and end waypoints from first and last track points
+                    first_point = track_points[0]
+                    last_point = track_points[-1]
+                    
+                    # Create start waypoint
+                    cursor.execute("""
+                        INSERT INTO waypoints (
+                            route_id, name, latitude, longitude, elevation_meters,
+                            order_index, waypoint_type
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        route_id, 'Start', 
+                        first_point.get('latitude', first_point.get('lat')),
+                        first_point.get('longitude', first_point.get('lon')),
+                        first_point.get('elevation'), 0, 'start'
+                    ))
+                    start_waypoint_id = cursor.fetchone()['id']
+                    logger.info(f"Created start waypoint with ID: {start_waypoint_id}")
+                    
+                    # Create end waypoint
+                    cursor.execute("""
+                        INSERT INTO waypoints (
+                            route_id, name, latitude, longitude, elevation_meters,
+                            order_index, waypoint_type
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        route_id, 'Finish', 
+                        last_point.get('latitude', last_point.get('lat')),
+                        last_point.get('longitude', last_point.get('lon')),
+                        last_point.get('elevation'), 1, 'finish'
+                    ))
+                    end_waypoint_id = cursor.fetchone()['id']
+                    logger.info(f"Created end waypoint with ID: {end_waypoint_id}")
+                    
+                    # Create route segment
+                    cursor.execute("""
+                        INSERT INTO route_segments (
+                            route_id, from_waypoint_id, to_waypoint_id,
+                            distance_meters, elevation_gain_meters, elevation_loss_meters
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                    """, (
+                        route_id, start_waypoint_id, end_waypoint_id,
+                        total_distance_meters,
+                        route_data.get('totalElevationGain', 0),
+                        route_data.get('totalElevationLoss', 0)
+                    ))
+                    route_segment_id = cursor.fetchone()['id']
+                    logger.info(f"Created route segment with ID: {route_segment_id}")
+                
+                # Save track points to the route segment
+                if route_segment_id:
+                    logger.info(f"Saving {len(track_points)} track points to route segment {route_segment_id}")
+                    for i, point in enumerate(track_points):
+                        cursor.execute("""
+                            INSERT INTO track_points (
+                                route_segment_id, latitude, longitude, elevation_meters,
+                                distance_from_segment_start_meters, point_index
+                            ) VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (
+                            route_segment_id,
+                            point.get('latitude', point.get('lat')),  # Support both formats
+                            point.get('longitude', point.get('lon')),  # Support both formats
+                            point.get('elevation'),
+                            point.get('cumulativeDistance', point.get('distance', 0)),
+                            i
+                        ))
+                    
+                    logger.info(f"Saved {len(track_points)} track points for route {route_id}")
+                    
+                    # Save GPX file metadata
+                    file_content = route_data.get('gpxData', route_name)  # Use GPX data if available, otherwise filename
+                    file_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                    
+                    cursor.execute("""
+                        INSERT INTO gpx_files (
+                            route_id, original_filename, file_hash,
+                            original_point_count, simplified_point_count, compression_ratio
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        route_id,
+                        route_name,
+                        file_hash,
+                        len(track_points),  # Original points (TODO: could be different if we had raw GPX point count)
+                        len(track_points),  # Simplified points (same for now, until optimization implemented)
+                        1.0  # Compression ratio (1.0 = no compression for now)
+                    ))
+                    
+                    logger.info(f"Saved GPX file metadata for route {route_id}")
+                else:
+                    logger.warning(f"No route segment created for route {route_id}, track points not saved")
             
             logger.info(f"Route saved successfully for user {user_id} with ID {route_id}")
             return route_id

@@ -18,6 +18,7 @@ const AnalyzerTab: React.FC = () => {
     isLoading,
     currentRoute,
     setTrackPoints,
+    setWaypoints,
     setFileInfo,
     setLoading,
     setCurrentRoute,
@@ -26,6 +27,7 @@ const AnalyzerTab: React.FC = () => {
   } = useAppStore();
 
   const [saveRouteName, setSaveRouteName] = useState('');
+  const [uploadMode, setUploadMode] = useState<'database' | 'local'>('database');
 
   const handleFileUpload = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith('.gpx')) {
@@ -39,27 +41,102 @@ const AnalyzerTab: React.FC = () => {
     setLoading(true);
     
     try {
-      const fileText = await file.text();
-      const { trackPoints: parsedPoints, fileInfo: parsedInfo } = parseGPX(fileText, file.name);
-      
-      setTrackPoints(parsedPoints);
-      setFileInfo(parsedInfo);
-      setHasValidTime(parsedInfo.hasValidTime);
-      
-      addToast({
-        type: 'success',
-        message: `GPX file "${file.name}" loaded successfully!`,
-      });
+      if (uploadMode === 'database') {
+        // Upload to database via backend
+        const uploadResult = await routeApi.uploadGpxFile(file);
+        
+        // Fetch the saved route data to populate the UI
+        const routeDetail = await routeApi.getRouteById(uploadResult.route_id.toString());
+        
+        // Convert backend format to frontend format
+        if (routeDetail.route && routeDetail.trackPoints) {
+          console.log('Raw API Response waypoints:', routeDetail.waypoints);
+          
+          const convertedTrackPoints = routeDetail.trackPoints.map((point: any) => ({
+            lat: point.lat,
+            lon: point.lon,
+            elevation: point.elevation || 0,
+            time: point.time || null,
+            distance: point.distance || 0,
+            cumulativeDistance: point.cumulativeDistance || 0
+          }));
+          
+          // Convert waypoints from API format to frontend format
+          const convertedWaypoints = routeDetail.waypoints?.map((waypoint: any, index: number) => ({
+            id: waypoint.id?.toString() || index.toString(),
+            legNumber: waypoint.order_index || index,
+            legName: waypoint.name || `Waypoint ${index + 1}`,
+            distanceMiles: 0, // Will be calculated by route planning logic
+            cumulativeDistance: 0, // Will be calculated by route planning logic
+            durationSeconds: 0, // Will be calculated by route planning logic
+            legPaceSeconds: 0, // Will be calculated by route planning logic
+            elevationGain: 0, // Will be calculated by route planning logic
+            elevationLoss: 0, // Will be calculated by route planning logic
+            cumulativeElevationGain: 0, // Will be calculated by route planning logic
+            cumulativeElevationLoss: 0, // Will be calculated by route planning logic
+            restTimeSeconds: 0,
+            notes: waypoint.description || '',
+            latitude: waypoint.latitude,
+            longitude: waypoint.longitude,
+            elevation: waypoint.elevation_meters || 0
+          })) || [];
+          
+          console.log('Converted waypoints:', convertedWaypoints);
+          
+          const convertedFileInfo = {
+            filename: uploadResult.route_name,
+            totalDistance: uploadResult.total_distance_meters,
+            totalElevationGain: uploadResult.total_elevation_gain_meters,
+            totalElevationLoss: routeDetail.route.total_elevation_loss || 0,
+            hasValidTime: routeDetail.route.has_valid_time || false,
+            startTime: routeDetail.route.start_time || undefined,
+            trackPointCount: convertedTrackPoints.length
+          };
+          
+          setTrackPoints(convertedTrackPoints);
+          setWaypoints(convertedWaypoints);
+          setFileInfo(convertedFileInfo);
+          setHasValidTime(convertedFileInfo.hasValidTime);
+          setCurrentRoute({
+            filename: uploadResult.route_name,
+            totalDistance: uploadResult.total_distance_meters,
+            totalElevationGain: uploadResult.total_elevation_gain_meters,
+            totalElevationLoss: routeDetail.route.total_elevation_loss || 0,
+            hasValidTime: routeDetail.route.has_valid_time || false,
+            startTime: routeDetail.route.start_time || undefined,
+            trackPoints: convertedTrackPoints
+          });
+          
+          addToast({
+            type: 'success',
+            message: `GPX file "${file.name}" uploaded and saved to database! 
+                     Processed ${uploadResult.original_points} points in ${uploadResult.processing_time_seconds.toFixed(2)}s`,
+          });
+        }
+      } else {
+        // Local processing (original behavior)
+        const fileText = await file.text();
+        const { trackPoints: parsedPoints, fileInfo: parsedInfo } = parseGPX(fileText, file.name);
+        
+        setTrackPoints(parsedPoints);
+        setFileInfo(parsedInfo);
+        setHasValidTime(parsedInfo.hasValidTime);
+        
+        addToast({
+          type: 'success',
+          message: `GPX file "${file.name}" loaded successfully!`,
+        });
+      }
     } catch (error) {
-      console.error('Error parsing GPX:', error);
+      console.error('Error processing GPX:', error);
       addToast({
         type: 'error',
-        message: `Error parsing GPX file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        message: `Error processing GPX file: ${handleApiError(error)}`,
       });
     } finally {
       setLoading(false);
     }
-  }, [setTrackPoints, setFileInfo, setLoading, setHasValidTime, addToast]);
+  }, [uploadMode, setTrackPoints, setWaypoints, setFileInfo, setLoading, setHasValidTime, setCurrentRoute, addToast]);
 
   const handleSampleData = useCallback(() => {
     setLoading(true);
@@ -137,6 +214,44 @@ const AnalyzerTab: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      {/* Upload Mode Selection */}
+      <div className="bg-blue-50 p-4 rounded-lg">
+        <h3 className="text-lg font-semibold mb-3 flex items-center">
+          <Upload className="h-5 w-5 mr-2" />
+          Upload Mode
+        </h3>
+        <div className="flex gap-4">
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="uploadMode"
+              value="database"
+              checked={uploadMode === 'database'}
+              onChange={(e) => setUploadMode(e.target.value as 'database' | 'local')}
+              className="mr-2"
+            />
+            Save to Database (Recommended)
+          </label>
+          <label className="flex items-center">
+            <input
+              type="radio"
+              name="uploadMode"
+              value="local"
+              checked={uploadMode === 'local'}
+              onChange={(e) => setUploadMode(e.target.value as 'database' | 'local')}
+              className="mr-2"
+            />
+            Local Analysis Only
+          </label>
+        </div>
+        <p className="text-sm text-gray-600 mt-2">
+          {uploadMode === 'database' 
+            ? 'GPX files will be processed and saved to your account for future access.'
+            : 'GPX files will be processed locally without saving to database.'
+          }
+        </p>
+      </div>
+
       {/* File Upload Section */}
       <FileUploadSection
         onFileUpload={handleFileUpload}
@@ -164,8 +279,8 @@ const AnalyzerTab: React.FC = () => {
         <RoutePlanningTable trackPoints={trackPoints} />
       )}
 
-      {/* Save Route Section */}
-      {trackPoints.length > 0 && (
+      {/* Save Route Section - Only show if not already saved to database */}
+      {trackPoints.length > 0 && uploadMode === 'local' && (
         <div className="bg-gray-50 p-6 rounded-lg">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <MapPin className="h-5 w-5 mr-2" />
@@ -195,8 +310,21 @@ const AnalyzerTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Current Route Display */}
+      {currentRoute && (
+        <div className="bg-green-50 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-2 flex items-center text-green-800">
+            <MapPin className="h-5 w-5 mr-2" />
+            Current Route: {currentRoute.filename}
+          </h3>
+          <p className="text-sm text-green-700">
+            Saved to your account • {(currentRoute.totalDistance / 1609.34).toFixed(2)} miles
+          </p>
+        </div>
+      )}
     </div>
   );
 };
 
-export default AnalyzerTab; 
+export default AnalyzerTab;

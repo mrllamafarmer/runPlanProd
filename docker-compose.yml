@@ -21,6 +21,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL Manager - Web UI for database management
+  pgmanager:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@runplanprod.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "5051:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - gpx-network
+    depends_on:
+      database:
+        condition: service_healthy
+
   backend:
     build: ./backend
     ports:
@@ -62,3 +81,4 @@ networks:
 volumes:
   gpx-data:
   postgres_data:
+  pgadmin_data:

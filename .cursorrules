@@ -2,6 +2,11 @@
 - [x] This is a prototype to be fleshed out into a production-grade application.
 - [x] All new development should be containerized using Docker.
 
+## Docker Development Notes
+- **Frontend changes may require complete rebuild**: Due to Docker caching issues with multi-stage builds, frontend changes may not take effect with normal `docker-compose build` or `docker-compose restart`. 
+- **Use complete rebuild command**: When frontend changes don't appear after normal rebuild, use: `docker compose down --rmi all && docker compose up -d --build`
+- **This ensures**: All images are removed and rebuilt from scratch, bypassing Docker's aggressive caching.
+
 ## Backend ✅ COMPLETED
 - [x] The backend should be developed using Python.
 - [x] Consider using a robust Python web framework (e.g., FastAPI, Django, or Flask).
