@@ -11,6 +11,19 @@ class DatabaseException(GPXAnalyzerException):
     """Raised when database operations fail"""
     pass
 
+# Alias for new naming convention
+class DatabaseError(DatabaseException):
+    """Raised when database operations fail (PostgreSQL version)"""
+    pass
+
+class AuthenticationError(GPXAnalyzerException):
+    """Raised when authentication fails"""
+    pass
+
+class ValidationError(GPXAnalyzerException):
+    """Raised when data validation fails (updated naming)"""
+    pass
+
 class RouteNotFoundException(GPXAnalyzerException):
     """Raised when a requested route is not found"""
     pass
@@ -19,8 +32,8 @@ class WaypointNotFoundException(GPXAnalyzerException):
     """Raised when a requested waypoint is not found"""
     pass
 
-class ValidationException(GPXAnalyzerException):
-    """Raised when data validation fails"""
+class ValidationException(ValidationError):
+    """Raised when data validation fails (legacy naming)"""
     pass
 
 class FileProcessingException(GPXAnalyzerException):

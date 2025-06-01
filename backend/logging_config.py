@@ -67,4 +67,10 @@ def setup_logging():
     logger = logging.getLogger('gpx_analyzer')
     logger.info("Logging system initialized")
     
-    return logger 
+    return logger
+
+def get_logger(name: str = None):
+    """Get a logger instance with the specified name"""
+    if name is None:
+        name = 'gpx_analyzer'
+    return logging.getLogger(name) 
