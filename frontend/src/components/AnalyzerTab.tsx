@@ -13,6 +13,7 @@ import RouteSummary from './RouteSummary';
 const AnalyzerTab: React.FC = () => {
   const {
     trackPoints,
+    waypoints,
     fileInfo,
     isLoading,
     currentRoute,
@@ -155,7 +156,7 @@ const AnalyzerTab: React.FC = () => {
 
       {/* Route Visualization */}
       {trackPoints.length > 0 && (
-        <RouteVisualization trackPoints={trackPoints} />
+        <RouteVisualization trackPoints={trackPoints} waypoints={waypoints} />
       )}
 
       {/* Route Planning Table */}
