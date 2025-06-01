@@ -1,0 +1,28 @@
+## General
+- [ ] This is a prototype to be fleshed out into a production-grade application.
+- [x] All new development should be containerized using Docker.
+
+## Backend
+- [x] The backend should be developed using Python.
+- [x] Consider using a robust Python web framework (e.g., FastAPI, Django, or Flask).
+- [ ] Employ a production-grade database (e.g., PostgreSQL) instead of SQLite for future development.
+- [x] Follow RESTful API design principles.
+- [x] Implement comprehensive error handling and logging.
+- [x] Write unit and integration tests for all backend components.
+
+## Frontend
+- [ ] The frontend should be developed using React and TypeScript.
+- [ ] Utilize a modern state management library (e.g., Redux Toolkit, Zustand).
+- [ ] Implement a component-based architecture.
+- [ ] Ensure the UI is responsive and accessible.
+- [ ] Write unit and integration tests for all frontend components.
+
+## Infrastructure
+- [x] Continue using Docker and Docker Compose for local development and deployment.
+- [ ] Set up CI/CD pipelines for automated testing and deployment.
+- [ ] Implement monitoring and alerting for production environments.
+
+## Code Style
+- [x] Follow consistent code style guidelines for Python (e.g., PEP 8).
+- [ ] Follow consistent code style guidelines for TypeScript/JavaScript (e.g., Prettier, ESLint).
+- [x] Add comments to explain complex logic or non-obvious code.
