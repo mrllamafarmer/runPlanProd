@@ -19,7 +19,9 @@ export default function SavedRoutesTab() {
     setFileInfo, 
     setActiveTab, 
     setHasValidTime,
-    addToast 
+    addToast,
+    setCurrentRouteId,
+    setRouteWaypoints
   } = useAppStore();
 
   // Fetch routes on component mount
@@ -44,8 +46,11 @@ export default function SavedRoutesTab() {
     try {
       setLoadingRouteId(routeId);
       
-      // Fetch the full route details
-      const routeDetail = await routeApi.getRouteById(routeId);
+      // Fetch the full route details and waypoints
+      const [routeDetail, routeWaypoints] = await Promise.all([
+        routeApi.getRouteById(routeId),
+        routeApi.getRouteWaypoints(routeId)
+      ]);
       
       // Convert API response to frontend format
       if (routeDetail.route && routeDetail.trackPoints) {
@@ -80,27 +85,27 @@ export default function SavedRoutesTab() {
 
         // Create route data object
         const routeData = {
-          filename: routeDetail.route.filename,
-          totalDistance: routeDetail.route.total_distance * 1000, // Convert km to meters for consistency
-          totalElevationGain: routeDetail.route.total_elevation_gain,
-          totalElevationLoss: routeDetail.route.total_elevation_loss,
-          hasValidTime: routeDetail.route.has_valid_time || false,
-          startTime: routeDetail.route.start_time,
-          targetTimeSeconds: routeDetail.route.target_time_seconds,
-          usingTargetTime: routeDetail.route.using_target_time || false,
+          filename: (routeDetail.route as any).name,
+          totalDistance: (routeDetail.route as any).totalDistance * 1000,
+          totalElevationGain: (routeDetail.route as any).totalElevationGain || 0,
+          totalElevationLoss: 0,
+          hasValidTime: false,
+          startTime: undefined,
+          targetTimeSeconds: (routeDetail.route as any).targetTimeSeconds || 0,
+          usingTargetTime: false,
           trackPoints: convertedTrackPoints,
           waypoints: convertedWaypoints
         };
 
         // Create file info object
         const fileInfo = {
-          filename: routeDetail.route.filename,
+          filename: (routeDetail.route as any).name,
           trackPointCount: convertedTrackPoints.length,
-          hasValidTime: routeDetail.route.has_valid_time || false,
-          startTime: routeDetail.route.start_time,
-          totalDistance: routeDetail.route.total_distance * 1000, // Convert km to meters
-          totalElevationGain: routeDetail.route.total_elevation_gain,
-          totalElevationLoss: routeDetail.route.total_elevation_loss
+          hasValidTime: false,
+          startTime: undefined,
+          totalDistance: (routeDetail.route as any).totalDistance * 1000,
+          totalElevationGain: (routeDetail.route as any).totalElevationGain || 0,
+          totalElevationLoss: 0
         };
 
         // Update app state
@@ -108,7 +113,11 @@ export default function SavedRoutesTab() {
         setTrackPoints(convertedTrackPoints);
         setWaypoints(convertedWaypoints);
         setFileInfo(fileInfo);
-        setHasValidTime(routeDetail.route.has_valid_time || false);
+        setHasValidTime(false);
+        
+        // Set current route ID and load enhanced waypoints for waypoint management
+        setCurrentRouteId(routeId);
+        setRouteWaypoints(routeWaypoints || []);
         
         // Switch to analyzer tab
         setActiveTab('analyzer');
@@ -280,7 +289,7 @@ export default function SavedRoutesTab() {
                 {route.has_valid_time && (
                   <div className="mt-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      Has Time Data
+                      ⏱️ Contains timing data
                     </span>
                   </div>
                 )}

@@ -509,6 +509,199 @@ def update_waypoint_notes(route_id: str, waypoint_id: int, notes: str, user_id: 
         logger.error(f"Error updating waypoint {waypoint_id} notes for user {user_id}: {str(e)}")
         raise DatabaseError(f"Failed to update waypoint notes: {str(e)}")
 
+def create_waypoint(route_id: int, waypoint_data: Dict[str, Any], user_id: int) -> Optional[int]:
+    """
+    Create a new waypoint for a route (only if user owns the route).
+    
+    Args:
+        route_id: The route ID
+        waypoint_data: Waypoint data dictionary
+        user_id: The user's ID (for ownership verification)
+        
+    Returns:
+        int: The new waypoint ID if successful
+    """
+    try:
+        with get_db_cursor() as cursor:
+            # Verify route ownership
+            cursor.execute("""
+                SELECT id FROM routes 
+                WHERE id = %s AND user_id = %s
+            """, (route_id, user_id))
+            
+            if not cursor.fetchone():
+                logger.warning(f"Route {route_id} not found or not owned by user {user_id}")
+                return None
+            
+            # Create waypoint
+            cursor.execute("""
+                INSERT INTO waypoints (
+                    route_id, name, description, latitude, longitude, 
+                    elevation_meters, order_index, waypoint_type, target_pace_per_km_seconds
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                route_id,
+                waypoint_data.get('name', 'New Waypoint'),
+                waypoint_data.get('description'),
+                waypoint_data['latitude'],
+                waypoint_data['longitude'],
+                waypoint_data.get('elevation_meters'),
+                waypoint_data.get('order_index', 0),
+                waypoint_data.get('waypoint_type', 'checkpoint'),
+                waypoint_data.get('target_pace_per_km_seconds')
+            ))
+            
+            waypoint_result = cursor.fetchone()
+            waypoint_id = waypoint_result['id'] if waypoint_result else None
+            
+            if waypoint_id:
+                logger.info(f"Waypoint {waypoint_id} created for route {route_id} by user {user_id}")
+                return waypoint_id
+            else:
+                logger.error(f"Failed to create waypoint for route {route_id}")
+                return None
+                
+    except Exception as e:
+        logger.error(f"Error creating waypoint for route {route_id}: {str(e)}")
+        raise DatabaseError(f"Failed to create waypoint: {str(e)}")
+
+def update_waypoint(waypoint_id: int, waypoint_data: Dict[str, Any], user_id: int) -> bool:
+    """
+    Update an existing waypoint (only if user owns the route).
+    
+    Args:
+        waypoint_id: The waypoint ID
+        waypoint_data: Updated waypoint data dictionary
+        user_id: The user's ID (for ownership verification)
+        
+    Returns:
+        bool: True if updated successfully
+    """
+    try:
+        with get_db_cursor() as cursor:
+            # Build update query dynamically based on provided fields
+            update_fields = []
+            values = []
+            
+            for field, value in waypoint_data.items():
+                if field in ['name', 'description', 'latitude', 'longitude', 
+                           'elevation_meters', 'order_index', 'waypoint_type', 
+                           'target_pace_per_km_seconds']:
+                    update_fields.append(f"{field} = %s")
+                    values.append(value)
+            
+            if not update_fields:
+                logger.warning(f"No valid fields to update for waypoint {waypoint_id}")
+                return False
+            
+            # Add waypoint_id and user_id for WHERE clause
+            values.extend([waypoint_id, user_id])
+            
+            query = f"""
+                UPDATE waypoints 
+                SET {', '.join(update_fields)}
+                WHERE id = %s 
+                AND EXISTS (
+                    SELECT 1 FROM routes 
+                    WHERE id = waypoints.route_id AND user_id = %s
+                )
+            """
+            
+            cursor.execute(query, values)
+            updated_count = cursor.rowcount
+            
+            if updated_count > 0:
+                logger.info(f"Waypoint {waypoint_id} updated by user {user_id}")
+                return True
+            else:
+                logger.warning(f"Waypoint {waypoint_id} not found or user {user_id} lacks permission")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error updating waypoint {waypoint_id}: {str(e)}")
+        raise DatabaseError(f"Failed to update waypoint: {str(e)}")
+
+def delete_waypoint(waypoint_id: int, user_id: int) -> bool:
+    """
+    Delete a waypoint (only if user owns the route).
+    
+    Args:
+        waypoint_id: The waypoint ID to delete
+        user_id: The user's ID (for ownership verification)
+        
+    Returns:
+        bool: True if deleted successfully
+    """
+    try:
+        with get_db_cursor() as cursor:
+            # Delete waypoint with ownership check
+            cursor.execute("""
+                DELETE FROM waypoints 
+                WHERE id = %s 
+                AND EXISTS (
+                    SELECT 1 FROM routes 
+                    WHERE id = waypoints.route_id AND user_id = %s
+                )
+            """, (waypoint_id, user_id))
+            
+            deleted_count = cursor.rowcount
+            
+            if deleted_count > 0:
+                logger.info(f"Waypoint {waypoint_id} deleted by user {user_id}")
+                return True
+            else:
+                logger.warning(f"Waypoint {waypoint_id} not found or user {user_id} lacks permission")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error deleting waypoint {waypoint_id}: {str(e)}")
+        raise DatabaseError(f"Failed to delete waypoint: {str(e)}")
+
+def get_route_waypoints(route_id: int, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    """
+    Get all waypoints for a route.
+    
+    Args:
+        route_id: The route ID
+        user_id: The user's ID (for access control, None for public routes)
+        
+    Returns:
+        List of waypoint dictionaries
+    """
+    try:
+        with get_db_cursor() as cursor:
+            # Check route access
+            if user_id:
+                cursor.execute("""
+                    SELECT id FROM routes 
+                    WHERE id = %s AND (user_id = %s OR is_public = TRUE)
+                """, (route_id, user_id))
+            else:
+                cursor.execute("""
+                    SELECT id FROM routes 
+                    WHERE id = %s AND is_public = TRUE
+                """, (route_id,))
+            
+            if not cursor.fetchone():
+                logger.warning(f"Route {route_id} not found or not accessible to user {user_id}")
+                return []
+            
+            # Get waypoints
+            cursor.execute("""
+                SELECT * FROM waypoints 
+                WHERE route_id = %s 
+                ORDER BY order_index, id
+            """, (route_id,))
+            
+            waypoints = cursor.fetchall()
+            return [dict(w) for w in waypoints]
+            
+    except Exception as e:
+        logger.error(f"Error getting waypoints for route {route_id}: {str(e)}")
+        raise DatabaseError(f"Failed to get route waypoints: {str(e)}")
+
 # Health check function
 def check_database_health() -> Dict[str, Any]:
     """

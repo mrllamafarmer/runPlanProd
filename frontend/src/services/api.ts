@@ -96,6 +96,48 @@ export const routeApi = {
     return response.data;
   },
 
+  // Get waypoints for a route
+  getRouteWaypoints: async (routeId: string): Promise<any[]> => {
+    const response = await api.get<any[]>(`/routes/${routeId}/waypoints`);
+    return response.data;
+  },
+
+  // Create a new waypoint
+  createWaypoint: async (routeId: string, waypointData: {
+    name: string;
+    description?: string;
+    latitude: number;
+    longitude: number;
+    elevation_meters?: number;
+    order_index: number;
+    waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
+    target_pace_per_km_seconds?: number;
+  }): Promise<{ waypoint_id: number; message: string }> => {
+    const response = await api.post<{ waypoint_id: number; message: string }>(`/routes/${routeId}/waypoints`, waypointData);
+    return response.data;
+  },
+
+  // Update an existing waypoint
+  updateWaypoint: async (waypointId: string, waypointData: {
+    name?: string;
+    description?: string;
+    latitude?: number;
+    longitude?: number;
+    elevation_meters?: number;
+    order_index?: number;
+    waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi';
+    target_pace_per_km_seconds?: number;
+  }): Promise<{ message: string }> => {
+    const response = await api.put<{ message: string }>(`/waypoints/${waypointId}`, waypointData);
+    return response.data;
+  },
+
+  // Delete a waypoint
+  deleteWaypoint: async (waypointId: string): Promise<{ message: string }> => {
+    const response = await api.delete<{ message: string }>(`/waypoints/${waypointId}`);
+    return response.data;
+  },
+
   // Delete route
   deleteRoute: async (routeId: string): Promise<{ message: string }> => {
     const response = await api.delete<{ message: string }>(`/routes/${routeId}`);

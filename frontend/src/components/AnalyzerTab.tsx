@@ -183,9 +183,13 @@ const AnalyzerTab: React.FC = () => {
     setLoading(true);
     
     try {
+      // Convert distance from miles to meters for backend consistency
+      // Frontend parser calculates in miles, backend expects meters for distances > 1000
+      const totalDistanceMeters = fileInfo.totalDistance * 1609.34; // Convert miles to meters
+      
       const routeData = {
         filename: saveRouteName.trim(),
-        totalDistance: fileInfo.totalDistance,
+        totalDistance: totalDistanceMeters,
         totalElevationGain: fileInfo.totalElevationGain,
         totalElevationLoss: fileInfo.totalElevationLoss,
         hasValidTime: fileInfo.hasValidTime,

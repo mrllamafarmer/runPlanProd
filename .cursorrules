@@ -34,6 +34,13 @@
 - [ ] Migrate map visualization from vanilla Leaflet to react-leaflet.
 - [ ] Migrate charts from Chart.js to React-based charting.
 - [ ] Implement responsive design with Tailwind CSS.
+- [ ] **PRIORITY: Add interactive waypoint creation and editing**
+  - [ ] Implement click-to-create waypoints on map
+  - [ ] Add waypoint editing forms/modals
+  - [ ] Add drag-and-drop waypoint reordering
+  - [ ] Add waypoint type selection (start, checkpoint, finish, poi)
+  - [ ] Add real-time waypoint save functionality
+  - [ ] Add waypoint deletion capability
 
 ## Infrastructure
 - [x] Continue using Docker and Docker Compose for local development and deployment.

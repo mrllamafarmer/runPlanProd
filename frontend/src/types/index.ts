@@ -107,6 +107,43 @@ export interface WaypointNotesUpdate {
   notes: string;
 }
 
+// New enhanced waypoint types for API integration
+export interface WaypointDB {
+  id: number;
+  route_id: number;
+  name: string;
+  description?: string;
+  latitude: number;
+  longitude: number;
+  elevation_meters?: number;
+  order_index: number;
+  waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
+  target_pace_per_km_seconds?: number;
+  created_at: string;
+}
+
+export interface WaypointCreate {
+  name: string;
+  description?: string;
+  latitude: number;
+  longitude: number;
+  elevation_meters?: number;
+  order_index: number;
+  waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
+  target_pace_per_km_seconds?: number;
+}
+
+export interface WaypointUpdate {
+  name?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  elevation_meters?: number;
+  order_index?: number;
+  waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi';
+  target_pace_per_km_seconds?: number;
+}
+
 export interface CustomLeg {
   distance: number;
   name?: string;
@@ -148,6 +185,11 @@ export interface AppState {
   trackPoints: TrackPoint[];
   waypoints: Waypoint[];
   customLegs: CustomLeg[];
+  
+  // Enhanced waypoint management
+  currentRouteId: string | null;
+  routeWaypoints: WaypointDB[];
+  isWaypointCreationMode: boolean;
   
   // Route settings
   targetTimeSeconds: number | null;

@@ -13,7 +13,8 @@ from typing import Optional
 
 from database import (
     init_database, save_route_data, get_user_routes, get_route_detail, 
-    delete_route, update_waypoint_notes, check_database_health
+    delete_route, update_waypoint_notes, check_database_health,
+    create_waypoint, update_waypoint, delete_waypoint, get_route_waypoints
 )
 from models import (
     UserCreate, UserLogin, UserResponse, User, PasswordChange,
@@ -412,6 +413,133 @@ async def update_waypoint_notes_endpoint(
     except Exception as e:
         logger.error(f"Unexpected error updating waypoint {waypoint_id} notes: {e}")
         raise GPXAnalyzerException(f"Failed to update waypoint notes: {str(e)}")
+
+@app.get("/api/routes/{route_id}/waypoints")
+async def get_route_waypoints_endpoint(
+    route_id: str,
+    current_user: User = Depends(get_current_user_optional)
+):
+    """Get all waypoints for a route"""
+    logger.debug(f"Getting waypoints for route {route_id}")
+    
+    try:
+        if not route_id or not route_id.isdigit():
+            raise ValidationError("Invalid route ID format")
+        
+        user_id = current_user.id if current_user else None
+        waypoints = get_route_waypoints(int(route_id), user_id)
+        
+        logger.info(f"Successfully retrieved {len(waypoints)} waypoints for route {route_id}")
+        return waypoints
+    
+    except ValidationError:
+        raise
+    except DatabaseError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error getting waypoints for route {route_id}: {e}")
+        raise GPXAnalyzerException(f"Failed to get route waypoints: {str(e)}")
+
+@app.post("/api/routes/{route_id}/waypoints")
+async def create_waypoint_endpoint(
+    route_id: str,
+    waypoint_data: WaypointCreate,
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new waypoint for a route"""
+    logger.info(f"Creating waypoint for route {route_id} by user {current_user.username}")
+    
+    try:
+        if not route_id or not route_id.isdigit():
+            raise ValidationError("Invalid route ID format")
+        
+        # Convert Pydantic model to dict
+        waypoint_dict = waypoint_data.model_dump()
+        
+        waypoint_id = create_waypoint(int(route_id), waypoint_dict, current_user.id)
+        
+        if not waypoint_id:
+            raise RouteNotFoundException(f"Route {route_id} not found or not accessible")
+        
+        logger.info(f"Successfully created waypoint {waypoint_id} for route {route_id}")
+        return {"waypoint_id": waypoint_id, "message": "Waypoint created successfully"}
+    
+    except ValidationError:
+        raise
+    except RouteNotFoundException:
+        raise
+    except DatabaseError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error creating waypoint for route {route_id}: {e}")
+        raise GPXAnalyzerException(f"Failed to create waypoint: {str(e)}")
+
+@app.put("/api/waypoints/{waypoint_id}")
+async def update_waypoint_endpoint(
+    waypoint_id: str,
+    waypoint_data: WaypointUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update an existing waypoint"""
+    logger.info(f"Updating waypoint {waypoint_id} by user {current_user.username}")
+    
+    try:
+        if not waypoint_id or not waypoint_id.isdigit():
+            raise ValidationError("Invalid waypoint ID format")
+        
+        # Convert Pydantic model to dict, excluding None values
+        waypoint_dict = {k: v for k, v in waypoint_data.model_dump().items() if v is not None}
+        
+        if not waypoint_dict:
+            raise ValidationError("No valid fields provided for update")
+        
+        success = update_waypoint(int(waypoint_id), waypoint_dict, current_user.id)
+        
+        if not success:
+            raise WaypointNotFoundException(f"Waypoint {waypoint_id} not found or not accessible")
+        
+        logger.info(f"Successfully updated waypoint {waypoint_id}")
+        return {"message": "Waypoint updated successfully"}
+    
+    except ValidationError:
+        raise
+    except WaypointNotFoundException:
+        raise
+    except DatabaseError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating waypoint {waypoint_id}: {e}")
+        raise GPXAnalyzerException(f"Failed to update waypoint: {str(e)}")
+
+@app.delete("/api/waypoints/{waypoint_id}")
+async def delete_waypoint_endpoint(
+    waypoint_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a waypoint"""
+    logger.info(f"Deleting waypoint {waypoint_id} by user {current_user.username}")
+    
+    try:
+        if not waypoint_id or not waypoint_id.isdigit():
+            raise ValidationError("Invalid waypoint ID format")
+        
+        success = delete_waypoint(int(waypoint_id), current_user.id)
+        
+        if not success:
+            raise WaypointNotFoundException(f"Waypoint {waypoint_id} not found or not accessible")
+        
+        logger.info(f"Successfully deleted waypoint {waypoint_id}")
+        return {"message": "Waypoint deleted successfully"}
+    
+    except ValidationError:
+        raise
+    except WaypointNotFoundException:
+        raise
+    except DatabaseError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error deleting waypoint {waypoint_id}: {e}")
+        raise GPXAnalyzerException(f"Failed to delete waypoint: {str(e)}")
 
 @app.delete("/api/routes/{route_id}")
 async def delete_route_endpoint(

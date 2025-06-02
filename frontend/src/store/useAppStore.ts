@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppState, TrackPoint, Waypoint, CustomLeg, RouteData, FileInfo, RouteListItem, Toast } from '../types';
+import { AppState, TrackPoint, Waypoint, CustomLeg, RouteData, FileInfo, RouteListItem, Toast, WaypointDB } from '../types';
 
 interface AppStore extends AppState {
   // Actions for route data
@@ -9,6 +9,17 @@ interface AppStore extends AppState {
   addCustomLeg: (leg: CustomLeg) => void;
   removeCustomLeg: (distance: number) => void;
   updateCustomLeg: (distance: number, updates: Partial<CustomLeg>) => void;
+  
+  // Enhanced waypoint management
+  currentRouteId: string | null;
+  setCurrentRouteId: (routeId: string | null) => void;
+  routeWaypoints: WaypointDB[];
+  setRouteWaypoints: (waypoints: WaypointDB[]) => void;
+  addRouteWaypoint: (waypoint: WaypointDB) => void;
+  updateRouteWaypoint: (waypointId: number, updates: Partial<WaypointDB>) => void;
+  removeRouteWaypoint: (waypointId: number) => void;
+  isWaypointCreationMode: boolean;
+  setWaypointCreationMode: (enabled: boolean) => void;
   
   // Actions for route settings
   setTargetTime: (seconds: number | null) => void;
@@ -43,6 +54,12 @@ const initialState: AppState = {
   trackPoints: [],
   waypoints: [],
   customLegs: [],
+  
+  // Enhanced waypoint management
+  currentRouteId: null,
+  routeWaypoints: [],
+  isWaypointCreationMode: false,
+  
   targetTimeSeconds: null,
   slowdownFactorPercent: 0,
   hasValidTime: false,
@@ -76,6 +93,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
       leg.distance === distance ? { ...leg, ...updates } : leg
     )
   })),
+  
+  // Enhanced waypoint management actions
+  setCurrentRouteId: (routeId) => set({ currentRouteId: routeId }),
+  
+  setRouteWaypoints: (waypoints) => set({ routeWaypoints: waypoints }),
+  
+  addRouteWaypoint: (waypoint) => set((state) => ({
+    routeWaypoints: [...state.routeWaypoints, waypoint].sort((a, b) => a.order_index - b.order_index)
+  })),
+  
+  updateRouteWaypoint: (waypointId, updates) => set((state) => ({
+    routeWaypoints: state.routeWaypoints.map(waypoint => 
+      waypoint.id === waypointId ? { ...waypoint, ...updates } : waypoint
+    )
+  })),
+  
+  removeRouteWaypoint: (waypointId) => set((state) => ({
+    routeWaypoints: state.routeWaypoints.filter(waypoint => waypoint.id !== waypointId)
+  })),
+  
+  setWaypointCreationMode: (enabled) => set({ isWaypointCreationMode: enabled }),
   
   // Route settings actions
   setTargetTime: (seconds) => set({ targetTimeSeconds: seconds }),
