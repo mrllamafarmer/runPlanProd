@@ -58,17 +58,15 @@ export interface RouteListItem {
 export interface RouteDetail {
   route: {
     id: string;
-    filename: string;
-    upload_date: string;
-    total_distance: number;
-    total_elevation_gain: number;
-    total_elevation_loss: number;
-    start_time?: string;
-    target_time_seconds?: number;
-    slowdown_factor_percent?: number;
-    has_valid_time?: boolean;
-    using_target_time?: boolean;
-    gpx_data?: string;
+    name: string;
+    description?: string;
+    totalDistance: number;
+    totalElevationGain: number;
+    totalElevationLoss: number;
+    targetTimeSeconds: number;
+    created_at?: string;
+    owner?: string;
+    is_public?: boolean;
   };
   waypoints: Array<{
     id: string;
@@ -89,12 +87,12 @@ export interface RouteDetail {
     elevation: number;
   }>;
   trackPoints: Array<{
-    latitude: number;
-    longitude: number;
+    lat: number;
+    lon: number;
     elevation?: number;
     time?: string;
     distance?: number;
-    cumulative_distance?: number;
+    cumulativeDistance?: number;
   }>;
 }
 
@@ -119,6 +117,7 @@ export interface WaypointDB {
   order_index: number;
   waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
   target_pace_per_km_seconds?: number;
+  rest_time_seconds?: number;
   created_at: string;
 }
 
@@ -131,6 +130,7 @@ export interface WaypointCreate {
   order_index: number;
   waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
   target_pace_per_km_seconds?: number;
+  rest_time_seconds?: number;
 }
 
 export interface WaypointUpdate {
@@ -142,6 +142,7 @@ export interface WaypointUpdate {
   order_index?: number;
   waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi';
   target_pace_per_km_seconds?: number;
+  rest_time_seconds?: number;
 }
 
 export interface CustomLeg {

@@ -58,6 +58,7 @@ class RouteUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     is_public: Optional[bool] = None
+    target_time_seconds: Optional[int] = Field(None, ge=0, description="Target completion time in seconds")
 
 
 class Route(BaseModel):
@@ -84,6 +85,7 @@ class WaypointCreate(BaseModel):
     order_index: int = Field(..., ge=0)
     waypoint_type: str = Field("checkpoint", pattern="^(start|checkpoint|finish|poi)$")
     target_pace_per_km_seconds: Optional[int] = Field(None, gt=0)
+    rest_time_seconds: Optional[int] = Field(0, ge=0, description="Rest time in seconds")
 
 
 class WaypointUpdate(BaseModel):
@@ -96,6 +98,7 @@ class WaypointUpdate(BaseModel):
     order_index: Optional[int] = Field(None, ge=0)
     waypoint_type: Optional[str] = Field(None, pattern="^(start|checkpoint|finish|poi)$")
     target_pace_per_km_seconds: Optional[int] = Field(None, gt=0)
+    rest_time_seconds: Optional[int] = Field(None, ge=0, description="Rest time in seconds")
 
 
 class WaypointDB(BaseModel):
@@ -110,6 +113,7 @@ class WaypointDB(BaseModel):
     order_index: int
     waypoint_type: str
     target_pace_per_km_seconds: Optional[int]
+    rest_time_seconds: Optional[int]
     created_at: str
 
 

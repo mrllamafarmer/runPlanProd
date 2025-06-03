@@ -90,6 +90,17 @@ export const routeApi = {
     return response.data;
   },
 
+  // Update route
+  updateRoute: async (routeId: string, routeData: {
+    name?: string;
+    description?: string;
+    is_public?: boolean;
+    target_time_seconds?: number;
+  }): Promise<{ message: string }> => {
+    const response = await api.put<{ message: string }>(`/routes/${routeId}`, routeData);
+    return response.data;
+  },
+
   // Update waypoint notes
   updateWaypointNotes: async (waypointId: string, notes: WaypointNotesUpdate): Promise<{ message: string }> => {
     const response = await api.put<{ message: string }>(`/waypoints/${waypointId}/notes`, notes);
@@ -112,6 +123,7 @@ export const routeApi = {
     order_index: number;
     waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
     target_pace_per_km_seconds?: number;
+    rest_time_seconds?: number;
   }): Promise<{ waypoint_id: number; message: string }> => {
     const response = await api.post<{ waypoint_id: number; message: string }>(`/routes/${routeId}/waypoints`, waypointData);
     return response.data;
@@ -127,6 +139,7 @@ export const routeApi = {
     order_index?: number;
     waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi';
     target_pace_per_km_seconds?: number;
+    rest_time_seconds?: number;
   }): Promise<{ message: string }> => {
     const response = await api.put<{ message: string }>(`/waypoints/${waypointId}`, waypointData);
     return response.data;

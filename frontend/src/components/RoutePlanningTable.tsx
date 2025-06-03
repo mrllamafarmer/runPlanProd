@@ -3,6 +3,7 @@ import { Edit3, Trash2, MapPin, Navigation, Clock, Mountain, ChevronUp, ChevronD
 import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
 import { WaypointDB } from '../types';
+import { secondsToMMSS, mmssToSeconds, isValidMMSS, formatRestTime } from '../utils/timeUtils';
 
 interface RoutePlanningTableProps {
   trackPoints: any[];
@@ -19,8 +20,9 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
   } = useAppStore();
 
   const [editingWaypoint, setEditingWaypoint] = useState<number | null>(null);
-  const [editForm, setEditForm] = useState<Partial<WaypointDB>>({});
+  const [editForm, setEditForm] = useState<Partial<WaypointDB & { rest_time_mmss: string }>>({});
   const [deletingWaypoint, setDeletingWaypoint] = useState<number | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Calculate distances between waypoints along the actual route track
   const calculateWaypointDistances = () => {
@@ -116,18 +118,29 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
 
   const handleEditWaypoint = (waypoint: WaypointDB) => {
     setEditingWaypoint(waypoint.id);
-    setEditForm(waypoint);
+    setEditForm({
+      ...waypoint,
+      rest_time_mmss: secondsToMMSS(waypoint.rest_time_seconds || 0)
+    });
+    setErrors({});
   };
 
   const handleSaveEdit = async () => {
     if (!editingWaypoint || !currentRouteId) return;
+    
+    // Validate rest time format if provided
+    if (editForm.rest_time_mmss && !isValidMMSS(editForm.rest_time_mmss)) {
+      setErrors({ rest_time: 'Please enter time in MM:SS format (e.g., 15:30)' });
+      return;
+    }
     
     try {
       const updateData = {
         name: editForm.name,
         description: editForm.description,
         waypoint_type: editForm.waypoint_type,
-        target_pace_per_km_seconds: editForm.target_pace_per_km_seconds
+        target_pace_per_km_seconds: editForm.target_pace_per_km_seconds,
+        rest_time_seconds: editForm.rest_time_mmss ? mmssToSeconds(editForm.rest_time_mmss) : 0
       };
       
       await routeApi.updateWaypoint(editingWaypoint.toString(), updateData);
@@ -136,6 +149,7 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
       
       setEditingWaypoint(null);
       setEditForm({});
+      setErrors({});
       
       addToast({
         type: 'success',
@@ -202,10 +216,12 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
     } catch (error) {
       addToast({
         type: 'error',
-        message: `Failed to reorder waypoint: ${handleApiError(error)}`
+        message: `Failed to update waypoint order: ${handleApiError(error)}`
       });
     }
   };
+
+  const waypointsWithDistances = calculateWaypointDistances();
 
   const formatDistance = (km: number) => {
     const miles = km * 0.621371;
@@ -220,18 +236,22 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
   };
 
   const getWaypointTypeIcon = (type: string) => {
+    const iconClass = "h-4 w-4";
     switch (type) {
-      case 'start': return <Navigation className="h-4 w-4 text-green-500" />;
-      case 'finish': return <MapPin className="h-4 w-4 text-red-500" />;
-      case 'checkpoint': return <MapPin className="h-4 w-4 text-blue-500" />;
-      case 'poi': return <Mountain className="h-4 w-4 text-orange-500" />;
-      default: return <MapPin className="h-4 w-4 text-gray-500" />;
+      case 'start':
+        return <MapPin className={`${iconClass} text-green-600`} />;
+      case 'finish':
+        return <Navigation className={`${iconClass} text-red-600`} />;
+      case 'checkpoint':
+        return <Clock className={`${iconClass} text-blue-600`} />;
+      case 'poi':
+        return <Mountain className={`${iconClass} text-orange-600`} />;
+      default:
+        return <MapPin className={`${iconClass} text-gray-600`} />;
     }
   };
 
-  const waypointsWithDistances = calculateWaypointDistances();
-
-  if (!currentRouteId) {
+  if (!trackPoints || trackPoints.length === 0) {
     return (
       <div className="bg-gray-50 p-4 rounded-lg">
         <h3 className="font-semibold text-gray-800">Route Planning Table</h3>
@@ -277,6 +297,9 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                 Cumulative
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Rest Time
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Target Pace
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -295,12 +318,22 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap">
                   {editingWaypoint === waypoint.id ? (
-                    <input
-                      type="text"
-                      value={editForm.name || ''}
-                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={editForm.name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Waypoint name"
+                      />
+                      <textarea
+                        value={editForm.description || ''}
+                        onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                        placeholder="Description (optional)"
+                        rows={2}
+                      />
+                    </div>
                   ) : (
                     <div>
                       <div className="text-sm font-medium text-gray-900">{waypoint.name}</div>
@@ -339,6 +372,33 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
                   {editingWaypoint === waypoint.id ? (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="MM:SS"
+                        value={editForm.rest_time_mmss || ''}
+                        onChange={(e) => {
+                          setEditForm({ ...editForm, rest_time_mmss: e.target.value });
+                          if (errors.rest_time) {
+                            setErrors({ ...errors, rest_time: '' });
+                          }
+                        }}
+                        className={`w-20 px-2 py-1 border rounded text-sm ${
+                          errors.rest_time ? 'border-red-300' : 'border-gray-300'
+                        }`}
+                      />
+                      {errors.rest_time && (
+                        <div className="text-xs text-red-600 mt-1">{errors.rest_time}</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      {waypoint.rest_time_seconds ? formatRestTime(waypoint.rest_time_seconds) : 'No rest'}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {editingWaypoint === waypoint.id ? (
                     <input
                       type="number"
                       placeholder="sec/km"
@@ -366,6 +426,7 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                         onClick={() => {
                           setEditingWaypoint(null);
                           setEditForm({});
+                          setErrors({});
                         }}
                         className="text-gray-600 hover:text-gray-900 text-sm"
                       >

@@ -40,6 +40,7 @@ CREATE TABLE waypoints (
     order_index INTEGER NOT NULL,
     waypoint_type VARCHAR(20) DEFAULT 'checkpoint', -- start, checkpoint, finish, poi
     target_pace_per_km_seconds INTEGER, -- user's target pace for this segment
+    rest_time_seconds INTEGER DEFAULT 0, -- rest time in seconds (supports multiday races)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
 );

@@ -412,6 +412,7 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
                     'description': route['description'],
                     'totalDistance': route['total_distance_meters'] / 1000,
                     'totalElevationGain': route['total_elevation_gain_meters'],
+                    'totalElevationLoss': 0,  # TODO: Calculate from track points if needed
                     'targetTimeSeconds': route['estimated_time_seconds'],
                     'created_at': route['created_at'].isoformat() if route['created_at'] else None,
                     'owner': route['username'],
@@ -468,6 +469,70 @@ def delete_route(route_id: str, user_id: int) -> bool:
     except Exception as e:
         logger.error(f"Error deleting route {route_id} for user {user_id}: {str(e)}")
         raise DatabaseError(f"Failed to delete route: {str(e)}")
+
+def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) -> bool:
+    """
+    Update a route (only if owned by user).
+    
+    Args:
+        route_id: The route ID to update
+        update_data: Dictionary containing fields to update
+        user_id: The user's ID (for ownership verification)
+        
+    Returns:
+        bool: True if updated successfully
+    """
+    try:
+        with get_db_cursor() as cursor:
+            # Build update query dynamically based on provided fields
+            update_fields = []
+            values = []
+            
+            # Map frontend field names to database field names
+            field_mapping = {
+                'name': 'name',
+                'description': 'description',
+                'is_public': 'is_public',
+                'target_time_seconds': 'estimated_time_seconds'  # Map target_time to estimated_time
+            }
+            
+            for field, value in update_data.items():
+                if field in field_mapping:
+                    db_field = field_mapping[field]
+                    update_fields.append(f"{db_field} = %s")
+                    values.append(value)
+            
+            if not update_fields:
+                logger.warning(f"No valid fields to update for route {route_id}")
+                return False
+            
+            # Add updated_at timestamp
+            update_fields.append("updated_at = CURRENT_TIMESTAMP")
+            
+            # Add WHERE clause parameters
+            values.extend([route_id, user_id])
+            
+            # Execute update with ownership check
+            query = f"""
+                UPDATE routes 
+                SET {', '.join(update_fields)}
+                WHERE id = %s AND user_id = %s
+            """
+            
+            cursor.execute(query, values)
+            
+            updated_count = cursor.rowcount
+            
+            if updated_count > 0:
+                logger.info(f"Route {route_id} updated by user {user_id}")
+                return True
+            else:
+                logger.warning(f"Route {route_id} not found or not owned by user {user_id}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"Error updating route {route_id} for user {user_id}: {str(e)}")
+        raise DatabaseError(f"Failed to update route: {str(e)}")
 
 def update_waypoint_notes(route_id: str, waypoint_id: int, notes: str, user_id: int) -> bool:
     """
@@ -537,9 +602,10 @@ def create_waypoint(route_id: int, waypoint_data: Dict[str, Any], user_id: int) 
             cursor.execute("""
                 INSERT INTO waypoints (
                     route_id, name, description, latitude, longitude, 
-                    elevation_meters, order_index, waypoint_type, target_pace_per_km_seconds
+                    elevation_meters, order_index, waypoint_type, target_pace_per_km_seconds,
+                    rest_time_seconds
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (
                 route_id,
@@ -550,7 +616,8 @@ def create_waypoint(route_id: int, waypoint_data: Dict[str, Any], user_id: int) 
                 waypoint_data.get('elevation_meters'),
                 waypoint_data.get('order_index', 0),
                 waypoint_data.get('waypoint_type', 'checkpoint'),
-                waypoint_data.get('target_pace_per_km_seconds')
+                waypoint_data.get('target_pace_per_km_seconds'),
+                waypoint_data.get('rest_time_seconds', 0)
             ))
             
             waypoint_result = cursor.fetchone()
@@ -588,7 +655,7 @@ def update_waypoint(waypoint_id: int, waypoint_data: Dict[str, Any], user_id: in
             for field, value in waypoint_data.items():
                 if field in ['name', 'description', 'latitude', 'longitude', 
                            'elevation_meters', 'order_index', 'waypoint_type', 
-                           'target_pace_per_km_seconds']:
+                           'target_pace_per_km_seconds', 'rest_time_seconds']:
                     update_fields.append(f"{field} = %s")
                     values.append(value)
             

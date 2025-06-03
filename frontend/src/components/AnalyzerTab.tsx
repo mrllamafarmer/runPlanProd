@@ -87,24 +87,25 @@ const AnalyzerTab: React.FC = () => {
             filename: uploadResult.route_name,
             totalDistance: uploadResult.total_distance_meters,
             totalElevationGain: uploadResult.total_elevation_gain_meters,
-            totalElevationLoss: routeDetail.route.total_elevation_loss || 0,
-            hasValidTime: routeDetail.route.has_valid_time || false,
-            startTime: routeDetail.route.start_time || undefined,
+            totalElevationLoss: routeDetail.route.totalElevationLoss || 0,
+            hasValidTime: false,
+            startTime: undefined,
             trackPointCount: convertedTrackPoints.length
           };
           
           setTrackPoints(convertedTrackPoints);
           setWaypoints(convertedWaypoints);
           setFileInfo(convertedFileInfo);
-          setHasValidTime(convertedFileInfo.hasValidTime);
+          setHasValidTime(false);
           setCurrentRoute({
             filename: uploadResult.route_name,
             totalDistance: uploadResult.total_distance_meters,
             totalElevationGain: uploadResult.total_elevation_gain_meters,
-            totalElevationLoss: routeDetail.route.total_elevation_loss || 0,
-            hasValidTime: routeDetail.route.has_valid_time || false,
-            startTime: routeDetail.route.start_time || undefined,
-            trackPoints: convertedTrackPoints
+            totalElevationLoss: routeDetail.route.totalElevationLoss || 0,
+            hasValidTime: false,
+            startTime: undefined,
+            trackPoints: convertedTrackPoints,
+            targetTimeSeconds: routeDetail.route.targetTimeSeconds || 0
           });
           
           addToast({

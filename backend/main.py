@@ -14,7 +14,8 @@ from typing import Optional
 from database import (
     init_database, save_route_data, get_user_routes, get_route_detail, 
     delete_route, update_waypoint_notes, check_database_health,
-    create_waypoint, update_waypoint, delete_waypoint, get_route_waypoints
+    create_waypoint, update_waypoint, delete_waypoint, get_route_waypoints,
+    update_route_data
 )
 from models import (
     UserCreate, UserLogin, UserResponse, User, PasswordChange,
@@ -383,6 +384,44 @@ async def get_route(
     except Exception as e:
         logger.error(f"Unexpected error retrieving route {route_id}: {e}")
         raise GPXAnalyzerException(f"Failed to retrieve route: {str(e)}")
+
+@app.put("/api/routes/{route_id}")
+async def update_route(
+    route_id: str,
+    route_data: RouteUpdate,
+    current_user: User = Depends(get_current_user)
+):
+    """Update an existing route"""
+    logger.info(f"Updating route {route_id} for user {current_user.username}")
+    
+    try:
+        # Validate route_id format
+        if not route_id or not route_id.isdigit():
+            raise ValidationError("Invalid route ID format")
+        
+        # Convert Pydantic model to dict, excluding None values
+        update_dict = {k: v for k, v in route_data.model_dump().items() if v is not None}
+        
+        if not update_dict:
+            raise ValidationError("No valid fields provided for update")
+        
+        success = update_route_data(route_id, update_dict, current_user.id)
+        
+        if not success:
+            raise RouteNotFoundException(f"Route {route_id} not found or not owned by user")
+        
+        logger.info(f"Successfully updated route {route_id} for user {current_user.username}")
+        return {"message": "Route updated successfully"}
+    
+    except ValidationError:
+        raise
+    except RouteNotFoundException:
+        raise
+    except DatabaseError:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating route {route_id}: {e}")
+        raise GPXAnalyzerException(f"Failed to update route: {str(e)}")
 
 @app.put("/api/waypoints/{waypoint_id}/notes")
 async def update_waypoint_notes_endpoint(

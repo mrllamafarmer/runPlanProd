@@ -35,12 +35,47 @@
 - [ ] Migrate charts from Chart.js to React-based charting.
 - [ ] Implement responsive design with Tailwind CSS.
 - [ ] **PRIORITY: Add interactive waypoint creation and editing**
-  - [ ] Implement click-to-create waypoints on map
-  - [ ] Add waypoint editing forms/modals
+  - [x] Implement click-to-create waypoints on map
+  - [x] Add waypoint editing forms/modals
   - [ ] Add drag-and-drop waypoint reordering
-  - [ ] Add waypoint type selection (start, checkpoint, finish, poi)
-  - [ ] Add real-time waypoint save functionality
-  - [ ] Add waypoint deletion capability
+  - [x] Add waypoint type selection (start, checkpoint, finish, poi)
+  - [x] Add real-time waypoint save functionality
+  - [x] Add waypoint deletion capability
+  - [x] Add waypoint renaming capability
+  - [x] Add waypoint notes/description field
+  - [x] Add rest time in mm:ss format (no limit for multiday races)
+
+## Pacing & Time Management ✅ COMPLETED
+- [x] **Target Time Controls**: Comprehensive target time input supporting >24 hours
+  - [x] HH:MM:SS format input with validation (e.g., 30:00:00 for 30 hours)
+  - [x] Support for multiday races and ultra-endurance events
+  - [x] Clear and user-friendly time input validation
+- [x] **Pace Calculations**: Automatic pace calculation with rest time considerations
+  - [x] Overall average pace = total time ÷ distance
+  - [x] Moving average pace = (total time - total rest time) ÷ distance  
+  - [x] Display paces in MM:SS per mile format
+  - [x] Real-time pace updates based on waypoint rest times
+- [x] **Rest Time Integration**: Seamless integration with waypoint rest times
+  - [x] Aggregate total rest time from all waypoints
+  - [x] Visual breakdown of total time vs moving time vs rest time
+  - [x] Dynamic pace recalculation when waypoint rest times change
+- [x] **Time Utility Functions**: Comprehensive time handling utilities
+  - [x] HH:MM:SS ↔ seconds conversion functions
+  - [x] MM:SS ↔ seconds conversion functions (for rest times)
+  - [x] Input validation for both time formats
+  - [x] Pace calculation and formatting functions
+- [x] **UI/UX Features**: Professional and intuitive interface
+  - [x] Route statistics display (distance, rest time, waypoints)
+  - [x] Side-by-side overall pace vs moving pace comparison
+  - [x] Time breakdown visualization
+  - [x] Helpful tips and guidance for optimal pace planning
+- [x] **Target Time Persistence**: Auto-save target time to route database
+  - [x] Automatic saving of target time when set (for saved routes)
+  - [x] Auto-loading of target time when routes are opened
+  - [x] Persistence across page refreshes and browser sessions
+  - [x] Backend API endpoint for route updates (PUT /api/routes/{id})
+  - [x] Frontend integration with route loading and saving
+  - [x] Visual indicators showing auto-save status
 
 ## Infrastructure
 - [x] Continue using Docker and Docker Compose for local development and deployment.

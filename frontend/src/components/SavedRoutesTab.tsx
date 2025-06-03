@@ -83,18 +83,16 @@ export default function SavedRoutesTab() {
           elevation: waypoint.elevation || 0
         })) || [];
 
-        // Create route data object
+        // Create route data object (using consistent format with AnalyzerTab)
         const routeData = {
           filename: (routeDetail.route as any).name,
-          totalDistance: (routeDetail.route as any).totalDistance * 1000,
+          totalDistance: (routeDetail.route as any).totalDistance * 1000, // Convert km to meters (1 km = 1000 m)
           totalElevationGain: (routeDetail.route as any).totalElevationGain || 0,
           totalElevationLoss: 0,
           hasValidTime: false,
           startTime: undefined,
-          targetTimeSeconds: (routeDetail.route as any).targetTimeSeconds || 0,
-          usingTargetTime: false,
           trackPoints: convertedTrackPoints,
-          waypoints: convertedWaypoints
+          targetTimeSeconds: (routeDetail.route as any).targetTimeSeconds || 0
         };
 
         // Create file info object
@@ -103,7 +101,7 @@ export default function SavedRoutesTab() {
           trackPointCount: convertedTrackPoints.length,
           hasValidTime: false,
           startTime: undefined,
-          totalDistance: (routeDetail.route as any).totalDistance * 1000,
+          totalDistance: (routeDetail.route as any).totalDistance * 0.621371, // Convert km to miles for fileInfo
           totalElevationGain: (routeDetail.route as any).totalElevationGain || 0,
           totalElevationLoss: 0
         };

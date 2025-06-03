@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { TrackPoint, Waypoint, WaypointDB } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
+import WaypointEditModal from './WaypointEditModal';
 
 // Fix for default markers in webpack builds
 // This approach avoids importing image files directly
@@ -47,6 +48,8 @@ export default function MapVisualization({
   } = useAppStore();
 
   const [isCreatingWaypoint, setIsCreatingWaypoint] = useState(false);
+  const [editingWaypoint, setEditingWaypoint] = useState<WaypointDB | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Handle map click for waypoint creation
   const handleMapClick = async (e: L.LeafletMouseEvent) => {
@@ -375,13 +378,37 @@ export default function MapVisualization({
               Type: ${waypoint.waypoint_type}<br/>
               ${waypoint.description ? `Description: ${waypoint.description}<br/>` : ''}
               ${waypoint.elevation_meters ? `Elevation: ${waypoint.elevation_meters.toFixed(0)}m<br/>` : ''}
+              ${waypoint.rest_time_seconds ? `Rest Time: ${Math.floor(waypoint.rest_time_seconds / 60)}:${(waypoint.rest_time_seconds % 60).toString().padStart(2, '0')}<br/>` : ''}
               <div class="waypoint-actions" style="margin-top: 8px;">
-                <button onclick="editWaypoint(${waypoint.id})" style="margin-right: 4px; padding: 2px 6px; font-size: 11px;">Edit</button>
-                <button onclick="deleteWaypoint(${waypoint.id})" style="padding: 2px 6px; font-size: 11px; background: #ef4444; color: white;">Delete</button>
+                <button class="edit-waypoint-btn" data-waypoint-id="${waypoint.id}" style="margin-right: 4px; padding: 2px 6px; font-size: 11px;">Edit</button>
+                <button class="delete-waypoint-btn" data-waypoint-id="${waypoint.id}" style="padding: 2px 6px; font-size: 11px; background: #ef4444; color: white;">Delete</button>
               </div>
             </div>`
           );
 
+          // Add click handlers for popup buttons
+          waypointMarker.on('popupopen', () => {
+            const popup = waypointMarker.getPopup();
+            if (popup && popup.getElement()) {
+              const editBtn = popup.getElement()?.querySelector('.edit-waypoint-btn');
+              const deleteBtn = popup.getElement()?.querySelector('.delete-waypoint-btn');
+              
+              if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                  handleEditWaypoint(waypoint);
+                  waypointMarker.closePopup();
+                });
+              }
+              
+              if (deleteBtn) {
+                deleteBtn.addEventListener('click', async () => {
+                  waypointMarker.closePopup();
+                  await handleDeleteWaypoint(waypoint.id);
+                });
+              }
+            }
+          });
+          
           // Handle waypoint drag
           waypointMarker.on('dragend', async (e) => {
             const newLatLng = e.target.getLatLng();
@@ -447,6 +474,48 @@ export default function MapVisualization({
     };
   }, [trackPoints, waypoints, routeWaypoints, isWaypointCreationMode, currentRouteId, isCreatingWaypoint]);
 
+  // Handle waypoint edit
+  const handleEditWaypoint = (waypoint: WaypointDB) => {
+    setEditingWaypoint(waypoint);
+    setIsEditModalOpen(true);
+  };
+
+  // Handle waypoint save
+  const handleSaveWaypoint = async (waypointId: number, updates: any) => {
+    try {
+      await routeApi.updateWaypoint(waypointId.toString(), updates);
+      updateRouteWaypoint(waypointId, updates);
+      addToast({
+        type: 'success',
+        message: 'Waypoint updated successfully'
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: `Failed to update waypoint: ${handleApiError(error)}`
+      });
+      throw error; // Re-throw to let modal handle the error
+    }
+  };
+
+  // Handle waypoint delete
+  const handleDeleteWaypoint = async (waypointId: number) => {
+    try {
+      await routeApi.deleteWaypoint(waypointId.toString());
+      removeRouteWaypoint(waypointId);
+      addToast({
+        type: 'success',
+        message: 'Waypoint deleted successfully'
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        message: `Failed to delete waypoint: ${handleApiError(error)}`
+      });
+      throw error; // Re-throw to let modal handle the error
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
@@ -481,6 +550,18 @@ export default function MapVisualization({
         ref={mapRef} 
         style={{ height }}
         className="w-full"
+      />
+      
+      {/* Waypoint Edit Modal */}
+      <WaypointEditModal
+        isOpen={isEditModalOpen}
+        waypoint={editingWaypoint}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingWaypoint(null);
+        }}
+        onSave={handleSaveWaypoint}
+        onDelete={handleDeleteWaypoint}
       />
     </div>
   );
