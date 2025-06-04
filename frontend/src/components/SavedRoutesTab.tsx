@@ -90,9 +90,10 @@ export default function SavedRoutesTab() {
           totalElevationGain: (routeDetail.route as any).totalElevationGain || 0,
           totalElevationLoss: 0,
           hasValidTime: false,
-          startTime: undefined,
           trackPoints: convertedTrackPoints,
-          targetTimeSeconds: (routeDetail.route as any).targetTimeSeconds || 0
+          targetTimeSeconds: (routeDetail.route as any).targetTimeSeconds || 0,
+          slowdownFactorPercent: (routeDetail.route as any).slowdownFactorPercent || 0,
+          startTime: (routeDetail.route as any).startTime || undefined
         };
 
         // Create file info object

@@ -48,7 +48,6 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
         name: editForm.name,
         description: editForm.description,
         waypoint_type: editForm.waypoint_type,
-        target_pace_per_km_seconds: editForm.target_pace_per_km_seconds,
         rest_time_seconds: editForm.rest_time_mmss ? mmssToSeconds(editForm.rest_time_mmss) : 0
       };
       
@@ -137,13 +136,6 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
     return miles.toFixed(2);
   };
 
-  const formatPace = (secondsPerKm?: number) => {
-    if (!secondsPerKm) return 'N/A';
-    const minutes = Math.floor(secondsPerKm / 60);
-    const seconds = secondsPerKm % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}/km`;
-  };
-
   const getWaypointTypeIcon = (type: string) => {
     const iconClass = "h-4 w-4";
     switch (type) {
@@ -207,9 +199,6 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Rest Time
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Target Pace
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Elevation
@@ -304,19 +293,6 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                     <div className="text-sm">
                       {waypoint.rest_time_seconds ? formatRestTime(waypoint.rest_time_seconds) : 'No rest'}
                     </div>
-                  )}
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {editingWaypoint === waypoint.id ? (
-                    <input
-                      type="number"
-                      placeholder="sec/km"
-                      value={editForm.target_pace_per_km_seconds || ''}
-                      onChange={(e) => setEditForm({ ...editForm, target_pace_per_km_seconds: parseInt(e.target.value) || undefined })}
-                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                    />
-                  ) : (
-                    formatPace(waypoint.target_pace_per_km_seconds)
                   )}
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">

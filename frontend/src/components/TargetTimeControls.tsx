@@ -30,8 +30,36 @@ export default function TargetTimeControls() {
 
   const [targetTimeInput, setTargetTimeInput] = useState('');
   const [slowdownInput, setSlowdownInput] = useState('');
+  const [startTimeInput, setStartTimeInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // Add utility function to calculate arrival time of day
+  const calculateArrivalTime = (startTimeString: string, elapsedSeconds: number): string => {
+    if (!startTimeString) return '';
+    
+    try {
+      // Parse start time (HH:MM format)
+      const [hours, minutes] = startTimeString.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes)) return '';
+      
+      // Create date with start time
+      const startDate = new Date();
+      startDate.setHours(hours, minutes, 0, 0);
+      
+      // Add elapsed time
+      const arrivalDate = new Date(startDate.getTime() + elapsedSeconds * 1000);
+      
+      // Format as HH:MM
+      return arrivalDate.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch {
+      return '';
+    }
+  };
 
   // Initialize inputs when values change
   useEffect(() => {
@@ -43,20 +71,23 @@ export default function TargetTimeControls() {
   }, [targetTimeSeconds]);
 
   useEffect(() => {
-    if (slowdownFactorPercent > 0) {
+    if (slowdownFactorPercent !== undefined && slowdownFactorPercent !== null && slowdownFactorPercent >= 0) {
       setSlowdownInput(slowdownFactorPercent.toString());
     } else {
       setSlowdownInput('');
     }
   }, [slowdownFactorPercent]);
 
-  // Load target time and slowdown factor when route is loaded
+  // Load target time, slowdown factor, and start time when route is loaded
   useEffect(() => {
     if (currentRoute?.targetTimeSeconds) {
       setTargetTime(currentRoute.targetTimeSeconds);
     }
-    if (currentRoute?.slowdownFactorPercent) {
+    if (currentRoute?.slowdownFactorPercent !== undefined && currentRoute?.slowdownFactorPercent !== null) {
       setSlowdownFactor(currentRoute.slowdownFactorPercent);
+    }
+    if (currentRoute?.startTime) {
+      setStartTimeInput(currentRoute.startTime);
     }
   }, [currentRoute, setTargetTime, setSlowdownFactor]);
 
@@ -104,12 +135,13 @@ export default function TargetTimeControls() {
       endDistance: number;
       legTime: number;
       averagePace: string;
-      cumulativeTime: number;
+      arrivalTime: number;  // Time to arrive at this waypoint (before taking rest)
       restTime: number;
+      arrivalTimeOfDay: string; // Actual time of day
     }> = [];
 
     if (routeWaypoints && routeWaypoints.length > 0 && trackPoints && trackPoints.length > 0) {
-      let cumulativeTimeWithRest = 0;
+      let cumulativeTime = 0;  // Cumulative time including all previous legs and rest
 
       // Use the same distance calculation logic as the waypoint table
       const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
@@ -140,8 +172,10 @@ export default function TargetTimeControls() {
         );
 
         const restTime = waypoint.rest_time_seconds || 0;
-        cumulativeTimeWithRest += legTime + restTime;
-
+        
+        // Add current leg time to cumulative time
+        cumulativeTime += legTime;
+        
         legBreakdown.push({
           legName: waypoint.name || `Leg ${index + 1}`,
           distance: legDistance,
@@ -149,10 +183,14 @@ export default function TargetTimeControls() {
           endDistance: legEndDistance,
           legTime,
           averagePace: formatPacePerMile(legAveragePace),
-          cumulativeTime: cumulativeTimeWithRest,
-          restTime
+          arrivalTime: cumulativeTime,  // Cumulative time at arrival (before rest)
+          restTime,
+          arrivalTimeOfDay: calculateArrivalTime(startTimeInput, cumulativeTime)
         });
 
+        // Add rest time after recording the arrival time
+        cumulativeTime += restTime;
+        
         routeCumulativeDistance = legEndDistance;
       }
       
@@ -178,7 +216,7 @@ export default function TargetTimeControls() {
           slowdownFactorPercent
         );
 
-        cumulativeTimeWithRest += legTime;
+        cumulativeTime += legTime;
 
         legBreakdown.push({
           legName: 'Finish',
@@ -187,8 +225,9 @@ export default function TargetTimeControls() {
           endDistance: legEndDistance,
           legTime,
           averagePace: formatPacePerMile(legAveragePace),
-          cumulativeTime: cumulativeTimeWithRest,
-          restTime: 0
+          arrivalTime: cumulativeTime,
+          restTime: 0,
+          arrivalTimeOfDay: calculateArrivalTime(startTimeInput, cumulativeTime)
         });
       }
     }
@@ -202,7 +241,7 @@ export default function TargetTimeControls() {
       paceRange: paceRangeInfo,
       legBreakdown
     };
-  }, [targetTimeSeconds, totalDistanceMiles, totalRestTimeSeconds, slowdownFactorPercent, routeWaypoints, trackPoints]);
+  }, [targetTimeSeconds, totalDistanceMiles, totalRestTimeSeconds, slowdownFactorPercent, routeWaypoints, trackPoints, startTimeInput]);
 
   const handleTargetTimeChange = (value: string) => {
     setTargetTimeInput(value);
@@ -220,7 +259,22 @@ export default function TargetTimeControls() {
     }
   };
 
-  const saveTargetTimeToRoute = async (seconds: number, slowdownPercent: number = slowdownFactorPercent) => {
+  const handleStartTimeChange = (value: string) => {
+    setStartTimeInput(value);
+    // Clear errors when user starts typing
+    if (errors.startTime) {
+      setErrors(prev => ({ ...prev, startTime: '' }));
+    }
+    
+    // Auto-save start time for logged routes (debounced)
+    if (currentRouteId && targetTimeSeconds && targetTimeSeconds > 0) {
+      setTimeout(() => {
+        saveTargetTimeToRoute(targetTimeSeconds, slowdownFactorPercent, value);
+      }, 1000);
+    }
+  };
+
+  const saveTargetTimeToRoute = async (seconds: number, slowdownPercent: number = slowdownFactorPercent, startTime: string = startTimeInput) => {
     if (!currentRouteId) {
       // If no saved route, just update local state
       setTargetTime(seconds);
@@ -232,7 +286,8 @@ export default function TargetTimeControls() {
     try {
       await routeApi.updateRoute(currentRouteId, {
         target_time_seconds: seconds,
-        slowdown_factor_percent: slowdownPercent
+        slowdown_factor_percent: slowdownPercent,
+        start_time: startTime || undefined
       });
       
       setTargetTime(seconds);
@@ -240,7 +295,7 @@ export default function TargetTimeControls() {
       
       addToast({
         type: 'success',
-        message: 'Target time and pacing saved to route'
+        message: 'Target time, pacing, and start time saved to route'
       });
     } catch (error) {
       console.error('Error saving target time:', error);
@@ -428,6 +483,34 @@ export default function TargetTimeControls() {
         </div>
       </div>
 
+      {/* Start Time Input */}
+      <div className="mb-6">
+        <label htmlFor="start-time" className="block text-sm font-medium text-gray-700 mb-2">
+          <Clock className="h-4 w-4 inline mr-1" />
+          Start Time (Optional)
+        </label>
+        <div className="flex gap-3 items-start">
+          <div className="flex-1">
+            <input
+              id="start-time"
+              type="time"
+              value={startTimeInput}
+              onChange={(e) => handleStartTimeChange(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                errors.startTime ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+              }`}
+              disabled={isSaving}
+            />
+            {errors.startTime && (
+              <p className="mt-1 text-sm text-red-600">{errors.startTime}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Race start time to calculate arrival times of day at each waypoint
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Pace Calculations Display */}
       {paceCalculations && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
@@ -509,8 +592,11 @@ export default function TargetTimeControls() {
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Distance</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Avg Pace</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Leg Time</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Cumulative Time</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Rest</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Cumulative</th>
+                      {startTimeInput && (
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Time of Day</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -520,15 +606,22 @@ export default function TargetTimeControls() {
                         <td className="px-3 py-2">{leg.distance.toFixed(2)} mi</td>
                         <td className="px-3 py-2 font-mono">{leg.averagePace}</td>
                         <td className="px-3 py-2">{secondsToHHMMSS(leg.legTime)}</td>
+                        <td className="px-3 py-2 font-medium">{secondsToHHMMSS(leg.arrivalTime)}</td>
                         <td className="px-3 py-2">{leg.restTime > 0 ? secondsToHHMMSS(leg.restTime) : '-'}</td>
-                        <td className="px-3 py-2 font-medium">{secondsToHHMMSS(leg.cumulativeTime)}</td>
+                        {startTimeInput && (
+                          <td className="px-3 py-2 font-mono text-blue-600">
+                            {leg.arrivalTimeOfDay || '-'}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <p className="mt-2 text-xs text-gray-500">
-                💡 Leg times account for {slowdownFactorPercent > 0 ? 'variable pacing with slowdown factor' : 'constant pacing'}
+                💡 Cumulative Time = time to reach waypoint (before rest). 
+                {slowdownFactorPercent > 0 ? ' Variable pacing with slowdown factor applied.' : ' Constant pacing applied.'}
+                {startTimeInput && ' Time of Day shows actual arrival time based on start time.'}
               </p>
             </div>
           )}

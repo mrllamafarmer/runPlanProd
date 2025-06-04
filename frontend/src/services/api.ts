@@ -97,6 +97,7 @@ export const routeApi = {
     is_public?: boolean;
     target_time_seconds?: number;
     slowdown_factor_percent?: number;
+    start_time?: string;
   }): Promise<{ message: string }> => {
     const response = await api.put<{ message: string }>(`/routes/${routeId}`, routeData);
     return response.data;

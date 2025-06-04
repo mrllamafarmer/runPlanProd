@@ -414,6 +414,8 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
                     'totalElevationGain': route['total_elevation_gain_meters'],
                     'totalElevationLoss': 0,  # TODO: Calculate from track points if needed
                     'targetTimeSeconds': route['estimated_time_seconds'],
+                    'slowdownFactorPercent': route['slowdown_factor_percent'],
+                    'startTime': str(route['start_time']) if route['start_time'] else None,
                     'created_at': route['created_at'].isoformat() if route['created_at'] else None,
                     'owner': route['username'],
                     'is_public': route['is_public']
@@ -494,7 +496,8 @@ def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) 
                 'description': 'description',
                 'is_public': 'is_public',
                 'target_time_seconds': 'estimated_time_seconds',  # Map target_time to estimated_time
-                'slowdown_factor_percent': 'slowdown_factor_percent'  # Map slowdown factor
+                'slowdown_factor_percent': 'slowdown_factor_percent',  # Map slowdown factor
+                'start_time': 'start_time'  # Map start time
             }
             
             for field, value in update_data.items():
