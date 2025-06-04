@@ -493,7 +493,8 @@ def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) 
                 'name': 'name',
                 'description': 'description',
                 'is_public': 'is_public',
-                'target_time_seconds': 'estimated_time_seconds'  # Map target_time to estimated_time
+                'target_time_seconds': 'estimated_time_seconds',  # Map target_time to estimated_time
+                'slowdown_factor_percent': 'slowdown_factor_percent'  # Map slowdown factor
             }
             
             for field, value in update_data.items():

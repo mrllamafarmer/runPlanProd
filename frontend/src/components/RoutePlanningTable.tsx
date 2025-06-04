@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
 import { WaypointDB } from '../types';
 import { secondsToMMSS, mmssToSeconds, isValidMMSS, formatRestTime } from '../utils/timeUtils';
+import { calculateWaypointDistances } from '../utils/timeUtils';
 
 interface RoutePlanningTableProps {
   trackPoints: any[];
@@ -23,98 +24,6 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
   const [editForm, setEditForm] = useState<Partial<WaypointDB & { rest_time_mmss: string }>>({});
   const [deletingWaypoint, setDeletingWaypoint] = useState<number | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Calculate distances between waypoints along the actual route track
-  const calculateWaypointDistances = () => {
-    if (routeWaypoints.length === 0 || trackPoints.length === 0) return [];
-    
-    const sortedWaypoints = [...routeWaypoints].sort((a, b) => a.order_index - b.order_index);
-    const waypointDistances = [];
-    
-    for (let i = 0; i < sortedWaypoints.length; i++) {
-      const waypoint = sortedWaypoints[i];
-      let legDistance = 0;
-      let cumulativeDistance = 0;
-      
-      if (i > 0) {
-        const prevWaypoint = sortedWaypoints[i - 1];
-        
-        // Find closest track points to each waypoint
-        const prevTrackPointIndex = findClosestTrackPoint(prevWaypoint.latitude, prevWaypoint.longitude);
-        const currTrackPointIndex = findClosestTrackPoint(waypoint.latitude, waypoint.longitude);
-        
-        // Calculate distance along track points between waypoints
-        legDistance = calculateTrackDistanceBetweenPoints(prevTrackPointIndex, currTrackPointIndex);
-        cumulativeDistance = waypointDistances[i - 1].cumulativeDistance + legDistance;
-      }
-      
-      waypointDistances.push({
-        ...waypoint,
-        legDistance,
-        cumulativeDistance
-      });
-    }
-    
-    return waypointDistances;
-  };
-
-  // Find the closest track point to a given lat/lon
-  const findClosestTrackPoint = (targetLat: number, targetLon: number) => {
-    let closestIndex = 0;
-    let minDistance = Number.MAX_VALUE;
-    
-    for (let i = 0; i < trackPoints.length; i++) {
-      const point = trackPoints[i];
-      const distance = calculateHaversineDistance(
-        targetLat, targetLon,
-        point.lat, point.lon
-      );
-      
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = i;
-      }
-    }
-    
-    return closestIndex;
-  };
-
-  // Calculate distance along track points between two indices
-  const calculateTrackDistanceBetweenPoints = (startIndex: number, endIndex: number) => {
-    if (startIndex === endIndex) return 0;
-    
-    // Ensure we're going in the right direction
-    const start = Math.min(startIndex, endIndex);
-    const end = Math.max(startIndex, endIndex);
-    
-    let totalDistance = 0;
-    for (let i = start; i < end; i++) {
-      const currentPoint = trackPoints[i];
-      const nextPoint = trackPoints[i + 1];
-      
-      totalDistance += calculateHaversineDistance(
-        currentPoint.lat, currentPoint.lon,
-        nextPoint.lat, nextPoint.lon
-      );
-    }
-    
-    return totalDistance;
-  };
-
-  // Haversine distance calculation in kilometers
-  const calculateHaversineDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = toRadians(lat2 - lat1);
-    const dLon = toRadians(lon2 - lon1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-  };
-
-  const toRadians = (degrees: number) => degrees * (Math.PI / 180);
 
   const handleEditWaypoint = (waypoint: WaypointDB) => {
     setEditingWaypoint(waypoint.id);
@@ -221,10 +130,10 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
     }
   };
 
-  const waypointsWithDistances = calculateWaypointDistances();
+  // Calculate distances for display
+  const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
 
-  const formatDistance = (km: number) => {
-    const miles = km * 0.621371;
+  const formatDistance = (miles: number) => {
     return miles.toFixed(2);
   };
 
@@ -482,7 +391,7 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
       <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
         <div className="flex justify-between items-center text-sm text-gray-600">
           <div>
-            <span>Total Route Distance: {formatDistance((currentRoute?.totalDistance || 0) / 1000)} miles</span>
+            <span>Total Route Distance: {formatDistance((currentRoute?.totalDistance || 0) / 1609.34)} miles</span>
             <span className="ml-4 text-xs text-gray-500">(from track points)</span>
           </div>
           <div>

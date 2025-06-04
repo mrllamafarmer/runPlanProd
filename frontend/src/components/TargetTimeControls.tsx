@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calculator, Target } from 'lucide-react';
+import { Clock, Calculator, Target, TrendingDown } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
 import { 
@@ -7,7 +7,11 @@ import {
   hhmmssToSeconds, 
   isValidHHMMSS, 
   calculatePaceSecondsPerMile, 
-  formatPacePerMile 
+  formatPacePerMile,
+  getPaceRangeInfo,
+  calculateLegTimeWithSlowdown,
+  calculateLegAveragePace,
+  calculateWaypointDistances
 } from '../utils/timeUtils';
 
 export default function TargetTimeControls() {
@@ -15,17 +19,21 @@ export default function TargetTimeControls() {
     currentRoute,
     fileInfo,
     routeWaypoints,
+    trackPoints,
     setTargetTime,
     targetTimeSeconds,
+    slowdownFactorPercent,
+    setSlowdownFactor,
     currentRouteId,
     addToast
   } = useAppStore();
 
   const [targetTimeInput, setTargetTimeInput] = useState('');
+  const [slowdownInput, setSlowdownInput] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize target time input when targetTimeSeconds changes
+  // Initialize inputs when values change
   useEffect(() => {
     if (targetTimeSeconds) {
       setTargetTimeInput(secondsToHHMMSS(targetTimeSeconds));
@@ -34,12 +42,23 @@ export default function TargetTimeControls() {
     }
   }, [targetTimeSeconds]);
 
-  // Load target time when route is loaded
+  useEffect(() => {
+    if (slowdownFactorPercent > 0) {
+      setSlowdownInput(slowdownFactorPercent.toString());
+    } else {
+      setSlowdownInput('');
+    }
+  }, [slowdownFactorPercent]);
+
+  // Load target time and slowdown factor when route is loaded
   useEffect(() => {
     if (currentRoute?.targetTimeSeconds) {
       setTargetTime(currentRoute.targetTimeSeconds);
     }
-  }, [currentRoute, setTargetTime]);
+    if (currentRoute?.slowdownFactorPercent) {
+      setSlowdownFactor(currentRoute.slowdownFactorPercent);
+    }
+  }, [currentRoute, setTargetTime, setSlowdownFactor]);
 
   // Calculate total distance in miles
   const totalDistanceMiles = React.useMemo(() => {
@@ -74,14 +93,116 @@ export default function TargetTimeControls() {
       ? calculatePaceSecondsPerMile(movingTimeSeconds, totalDistanceMiles)
       : 0;
 
+    // Get pace range information with slowdown factor
+    const paceRangeInfo = getPaceRangeInfo(movingTimeSeconds, totalDistanceMiles, slowdownFactorPercent);
+
+    // Calculate leg-by-leg breakdown if waypoints exist
+    let legBreakdown: Array<{
+      legName: string;
+      distance: number;
+      startDistance: number;
+      endDistance: number;
+      legTime: number;
+      averagePace: string;
+      cumulativeTime: number;
+      restTime: number;
+    }> = [];
+
+    if (routeWaypoints && routeWaypoints.length > 0 && trackPoints && trackPoints.length > 0) {
+      let cumulativeTimeWithRest = 0;
+
+      // Use the same distance calculation logic as the waypoint table
+      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
+      
+      // Calculate cumulative distances from start of route
+      let routeCumulativeDistance = 0;
+      
+      for (let index = 0; index < waypointsWithDistances.length; index++) {
+        const waypoint = waypointsWithDistances[index];
+        const legStartDistance = routeCumulativeDistance;
+        const legDistance = waypoint.legDistance;
+        const legEndDistance = legStartDistance + legDistance;
+        
+        const legTime = calculateLegTimeWithSlowdown(
+          legStartDistance,
+          legEndDistance,  
+          totalDistanceMiles,
+          movingTimeSeconds,
+          slowdownFactorPercent
+        );
+        
+        const legAveragePace = calculateLegAveragePace(
+          legStartDistance,
+          legEndDistance,
+          totalDistanceMiles,
+          movingTimeSeconds,
+          slowdownFactorPercent
+        );
+
+        const restTime = waypoint.rest_time_seconds || 0;
+        cumulativeTimeWithRest += legTime + restTime;
+
+        legBreakdown.push({
+          legName: waypoint.name || `Leg ${index + 1}`,
+          distance: legDistance,
+          startDistance: legStartDistance,
+          endDistance: legEndDistance,
+          legTime,
+          averagePace: formatPacePerMile(legAveragePace),
+          cumulativeTime: cumulativeTimeWithRest,
+          restTime
+        });
+
+        routeCumulativeDistance = legEndDistance;
+      }
+      
+      // Add final leg to finish if there's remaining distance
+      const finalLegDistance = totalDistanceMiles - routeCumulativeDistance;
+      if (finalLegDistance > 0.1) { // Only add if meaningful distance remains
+        const legStartDistance = routeCumulativeDistance;
+        const legEndDistance = totalDistanceMiles;
+        
+        const legTime = calculateLegTimeWithSlowdown(
+          legStartDistance,
+          legEndDistance,
+          totalDistanceMiles,
+          movingTimeSeconds,
+          slowdownFactorPercent
+        );
+        
+        const legAveragePace = calculateLegAveragePace(
+          legStartDistance,
+          legEndDistance,
+          totalDistanceMiles,
+          movingTimeSeconds,
+          slowdownFactorPercent
+        );
+
+        cumulativeTimeWithRest += legTime;
+
+        legBreakdown.push({
+          legName: 'Finish',
+          distance: finalLegDistance,
+          startDistance: legStartDistance,
+          endDistance: legEndDistance,
+          legTime,
+          averagePace: formatPacePerMile(legAveragePace),
+          cumulativeTime: cumulativeTimeWithRest,
+          restTime: 0
+        });
+      }
+    }
+
     return {
       overallPace: formatPacePerMile(overallPaceSecondsPerMile),
       movingPace: formatPacePerMile(movingPaceSecondsPerMile),
       totalTime: secondsToHHMMSS(targetTimeSeconds),
       movingTime: secondsToHHMMSS(movingTimeSeconds),
-      restTime: secondsToHHMMSS(totalRestTimeSeconds)
+      restTime: secondsToHHMMSS(totalRestTimeSeconds),
+      paceRange: paceRangeInfo,
+      legBreakdown
     };
-  }, [targetTimeSeconds, totalDistanceMiles, totalRestTimeSeconds]);
+  }, [targetTimeSeconds, totalDistanceMiles, totalRestTimeSeconds, slowdownFactorPercent, routeWaypoints, trackPoints]);
 
   const handleTargetTimeChange = (value: string) => {
     setTargetTimeInput(value);
@@ -91,34 +212,46 @@ export default function TargetTimeControls() {
     }
   };
 
-  const saveTargetTimeToRoute = async (seconds: number) => {
+  const handleSlowdownFactorChange = (value: string) => {
+    setSlowdownInput(value);
+    // Clear errors when user starts typing
+    if (errors.slowdownFactor) {
+      setErrors(prev => ({ ...prev, slowdownFactor: '' }));
+    }
+  };
+
+  const saveTargetTimeToRoute = async (seconds: number, slowdownPercent: number = slowdownFactorPercent) => {
     if (!currentRouteId) {
       // If no saved route, just update local state
       setTargetTime(seconds);
+      setSlowdownFactor(slowdownPercent);
       return;
     }
 
     setIsSaving(true);
     try {
       await routeApi.updateRoute(currentRouteId, {
-        target_time_seconds: seconds
+        target_time_seconds: seconds,
+        slowdown_factor_percent: slowdownPercent
       });
       
       setTargetTime(seconds);
+      setSlowdownFactor(slowdownPercent);
       
       addToast({
         type: 'success',
-        message: 'Target time saved to route'
+        message: 'Target time and pacing saved to route'
       });
     } catch (error) {
       console.error('Error saving target time:', error);
       
       // Still update local state even if save fails
       setTargetTime(seconds);
+      setSlowdownFactor(slowdownPercent);
       
       addToast({
         type: 'warning',
-        message: 'Target time set locally (route not saved to database)'
+        message: 'Pacing settings set locally (route not saved to database)'
       });
     } finally {
       setIsSaving(false);
@@ -126,30 +259,49 @@ export default function TargetTimeControls() {
   };
 
   const handleTargetTimeSubmit = async () => {
-    if (!targetTimeInput.trim()) {
-      await saveTargetTimeToRoute(0);
-      setErrors({});
+    let hasErrors = false;
+    const newErrors: Record<string, string> = {};
+
+    // Validate target time
+    let seconds = 0;
+    if (targetTimeInput.trim()) {
+      if (!isValidHHMMSS(targetTimeInput)) {
+        newErrors.targetTime = 'Please enter time in HH:MM:SS format (e.g., 04:30:00 for 4.5 hours)';
+        hasErrors = true;
+      } else {
+        seconds = hhmmssToSeconds(targetTimeInput);
+        if (seconds <= 0) {
+          newErrors.targetTime = 'Target time must be greater than 0';
+          hasErrors = true;
+        }
+      }
+    }
+
+    // Validate slowdown factor
+    let slowdownPercent = 0;
+    if (slowdownInput.trim()) {
+      const slowdownValue = parseFloat(slowdownInput);
+      if (isNaN(slowdownValue) || slowdownValue < 0 || slowdownValue > 100) {
+        newErrors.slowdownFactor = 'Please enter a percentage between 0 and 100';
+        hasErrors = true;
+      } else {
+        slowdownPercent = slowdownValue;
+      }
+    }
+
+    if (hasErrors) {
+      setErrors(newErrors);
       return;
     }
 
-    if (!isValidHHMMSS(targetTimeInput)) {
-      setErrors({ targetTime: 'Please enter time in HH:MM:SS format (e.g., 04:30:00 for 4.5 hours)' });
-      return;
-    }
-
-    const seconds = hhmmssToSeconds(targetTimeInput);
-    if (seconds <= 0) {
-      setErrors({ targetTime: 'Target time must be greater than 0' });
-      return;
-    }
-
-    await saveTargetTimeToRoute(seconds);
+    await saveTargetTimeToRoute(seconds, slowdownPercent);
     setErrors({});
   };
 
   const handleClearTargetTime = async () => {
     setTargetTimeInput('');
-    await saveTargetTimeToRoute(0);
+    setSlowdownInput('');
+    await saveTargetTimeToRoute(0, 0);
     setErrors({});
   };
 
@@ -241,6 +393,41 @@ export default function TargetTimeControls() {
         </div>
       </div>
 
+      {/* Slowdown Factor Input */}
+      <div className="mb-6">
+        <label htmlFor="slowdown-factor" className="block text-sm font-medium text-gray-700 mb-2">
+          <TrendingDown className="h-4 w-4 inline mr-1" />
+          Pace Slowdown Factor (Optional)
+        </label>
+        <div className="flex gap-3 items-start">
+          <div className="flex-1">
+            <div className="relative">
+              <input
+                id="slowdown-factor"
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                value={slowdownInput}
+                onChange={(e) => handleSlowdownFactorChange(e.target.value)}
+                placeholder="0"
+                className={`w-full px-3 py-2 pr-8 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  errors.slowdownFactor ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                }`}
+                disabled={isSaving}
+              />
+              <span className="absolute right-3 top-2 text-gray-500 text-sm">%</span>
+            </div>
+            {errors.slowdownFactor && (
+              <p className="mt-1 text-sm text-red-600">{errors.slowdownFactor}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              Linear pace degradation: 0% = constant pace, 30% = 30% slower at finish than start
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Pace Calculations Display */}
       {paceCalculations && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
@@ -266,8 +453,24 @@ export default function TargetTimeControls() {
             <div className="space-y-3">
               <h5 className="font-medium text-gray-700">Moving Pace</h5>
               <div className="bg-green-50 p-4 rounded-md">
-                <p className="text-sm text-gray-600 mb-1">(Total Time - Rest Time) ÷ Distance</p>
-                <p className="text-2xl font-bold text-green-700">{paceCalculations.movingPace}</p>
+                <p className="text-sm text-gray-600 mb-1">
+                  {paceCalculations.paceRange.isConstant ? 
+                    '(Total Time - Rest Time) ÷ Distance' : 
+                    'Variable Pace with Slowdown Factor'
+                  }
+                </p>
+                {paceCalculations.paceRange.isConstant ? (
+                  <p className="text-2xl font-bold text-green-700">{paceCalculations.paceRange.averagePace}</p>
+                ) : (
+                  <div>
+                    <p className="text-lg font-bold text-green-700">
+                      {paceCalculations.paceRange.startPace} → {paceCalculations.paceRange.endPace}
+                    </p>
+                    <p className="text-sm text-green-600 mt-1">
+                      Average: {paceCalculations.paceRange.averagePace}
+                    </p>
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-1">
                   {paceCalculations.movingTime} ÷ {totalDistanceMiles.toFixed(2)} miles
                 </p>
@@ -293,6 +496,42 @@ export default function TargetTimeControls() {
               </div>
             </div>
           </div>
+
+          {/* Leg-by-Leg Breakdown */}
+          {paceCalculations.legBreakdown && paceCalculations.legBreakdown.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h5 className="font-medium text-gray-700 mb-3">Leg-by-Leg Pace Plan</h5>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border border-gray-200 rounded-md">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Leg</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Distance</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Avg Pace</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Leg Time</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Rest</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Cumulative</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paceCalculations.legBreakdown.map((leg, index) => (
+                      <tr key={index} className="border-b border-gray-100">
+                        <td className="px-3 py-2 font-medium">{leg.legName}</td>
+                        <td className="px-3 py-2">{leg.distance.toFixed(2)} mi</td>
+                        <td className="px-3 py-2 font-mono">{leg.averagePace}</td>
+                        <td className="px-3 py-2">{secondsToHHMMSS(leg.legTime)}</td>
+                        <td className="px-3 py-2">{leg.restTime > 0 ? secondsToHHMMSS(leg.restTime) : '-'}</td>
+                        <td className="px-3 py-2 font-medium">{secondsToHHMMSS(leg.cumulativeTime)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                💡 Leg times account for {slowdownFactorPercent > 0 ? 'variable pacing with slowdown factor' : 'constant pacing'}
+              </p>
+            </div>
+          )}
 
           {totalRestTimeSeconds === 0 && (
             <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">

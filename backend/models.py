@@ -59,6 +59,7 @@ class RouteUpdate(BaseModel):
     description: Optional[str] = None
     is_public: Optional[bool] = None
     target_time_seconds: Optional[int] = Field(None, ge=0, description="Target completion time in seconds")
+    slowdown_factor_percent: Optional[float] = Field(None, ge=0, le=100, description="Slowdown factor percentage (0-100)")
 
 
 class Route(BaseModel):
