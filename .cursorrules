@@ -34,16 +34,17 @@
 - [ ] Migrate map visualization from vanilla Leaflet to react-leaflet.
 - [ ] Migrate charts from Chart.js to React-based charting.
 - [ ] Implement responsive design with Tailwind CSS.
-- [ ] **PRIORITY: Add interactive waypoint creation and editing**
+- [x] **PRIORITY: Add interactive waypoint creation and editing**
   - [x] Implement click-to-create waypoints on map
   - [x] Add waypoint editing forms/modals
-  - [ ] Add drag-and-drop waypoint reordering
+  - [x] Add drag-and-drop waypoint reordering
   - [x] Add waypoint type selection (start, checkpoint, finish, poi)
   - [x] Add real-time waypoint save functionality
   - [x] Add waypoint deletion capability
   - [x] Add waypoint renaming capability
   - [x] Add waypoint notes/description field
   - [x] Add rest time in mm:ss format (no limit for multiday races)
+  - [x] Add elevation gain/loss display for each leg (+gain / -loss in feet)
 
 ## Pacing & Time Management ✅ COMPLETED
 - [x] **Target Time Controls**: Comprehensive target time input supporting >24 hours
