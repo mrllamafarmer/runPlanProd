@@ -77,6 +77,15 @@
   - [x] Backend API endpoint for route updates (PUT /api/routes/{id})
   - [x] Frontend integration with route loading and saving
   - [x] Visual indicators showing auto-save status
+- [x] **Elevation-Adjusted Pacing**: Advanced pace calculations accounting for terrain
+  - [x] Calculate route average elevation gain/loss per mile as baseline
+  - [x] Apply pace multipliers based on excess elevation vs route average
+  - [x] 5% slowdown per 30ft excess climb, 4% speedup per 30ft excess descent
+  - [x] Maintain total moving time while redistributing pace across legs
+  - [x] Elevation summary display (total gain/loss, averages per mile)
+  - [x] Dual pace display: base pace + elevation-adjusted pace in leg breakdown
+  - [x] Integration with existing linear slowdown factor
+  - [x] Elevation-adjusted leg times and cumulative times throughout
 
 ## Infrastructure
 - [x] Continue using Docker and Docker Compose for local development and deployment.

@@ -219,13 +219,37 @@ export default function TargetTimeControls() {
         const legStartDistance = routeCumulativeDistance;
         const legEndDistance = totalDistanceMiles;
         
-        const legTime = calculateLegTimeWithSlowdown(
+        // For final leg, also apply elevation adjustments if we have elevation data
+        let legTime = calculateLegTimeWithSlowdown(
           legStartDistance,
           legEndDistance,
           totalDistanceMiles,
           movingTimeSeconds,
           slowdownFactorPercent
         );
+        
+        // Apply elevation adjustment to final leg if elevation data exists
+        let elevationAdjustedPaceDisplay = '';
+        if (elevationSummary) {
+          // Create a mock waypoint for the final leg to calculate elevation adjustment
+          const finalLegWaypoint = {
+            legDistance: finalLegDistance,
+            cumulativeDistance: legEndDistance,
+            legElevationGain: 0, // No elevation data for final segment
+            legElevationLoss: 0
+          };
+          
+          const finalLegWithElevation = calculateElevationAdjustedLegTimes(
+            [finalLegWaypoint],
+            legTime, // Use single leg time as total
+            0 // No slowdown factor for single leg
+          );
+          
+          if (finalLegWithElevation[0]?.elevationAdjustedLegTime) {
+            legTime = finalLegWithElevation[0].elevationAdjustedLegTime;
+            elevationAdjustedPaceDisplay = finalLegWithElevation[0].elevationAdjustedPaceDisplay || '';
+          }
+        }
         
         const legAveragePace = calculateLegAveragePace(
           legStartDistance,
@@ -244,6 +268,7 @@ export default function TargetTimeControls() {
           endDistance: legEndDistance,
           legTime,
           averagePace: formatPacePerMile(legAveragePace),
+          elevationAdjustedPace: elevationAdjustedPaceDisplay,
           arrivalTime: cumulativeTime,
           restTime: 0,
           arrivalTimeOfDay: calculateArrivalTime(startTimeInput, cumulativeTime)
