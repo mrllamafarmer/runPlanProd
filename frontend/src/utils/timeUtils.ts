@@ -308,12 +308,118 @@ export function getPaceRangeInfo(
 }
 
 /**
+ * Calculate elevation gain and loss between two waypoints using track point indices
+ * @param startWaypoint - Starting waypoint with lat/lon
+ * @param endWaypoint - Ending waypoint with lat/lon  
+ * @param trackPoints - Array of track points
+ * @returns Object with elevation gain and loss in meters
+ */
+export function calculateElevationGainLossBetweenWaypoints(
+  startWaypoint: any,
+  endWaypoint: any,
+  trackPoints: any[]
+): { elevationGain: number; elevationLoss: number } {
+  if (trackPoints.length === 0) {
+    return { elevationGain: 0, elevationLoss: 0 };
+  }
+
+  // Find the closest track point indices for start and end waypoints
+  const findClosestTrackPointIndex = (waypoint: any): number => {
+    let closestIndex = 0;
+    let minDistance = Number.MAX_VALUE;
+    
+    for (let i = 0; i < trackPoints.length; i++) {
+      const tp = trackPoints[i];
+      if (tp.lat === undefined || tp.lon === undefined) continue;
+      
+      // Calculate Haversine distance
+      const R = 6371000; // Earth's radius in meters
+      const toRadians = (degrees: number) => degrees * (Math.PI / 180);
+      
+      const dLat = toRadians(waypoint.latitude - tp.lat);
+      const dLon = toRadians(waypoint.longitude - tp.lon);
+      const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(toRadians(tp.lat)) * Math.cos(toRadians(waypoint.latitude)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distance = R * c;
+      
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIndex = i;
+      }
+    }
+    
+    return closestIndex;
+  };
+
+  const startIndex = findClosestTrackPointIndex(startWaypoint);
+  const endIndex = findClosestTrackPointIndex(endWaypoint);
+  
+  // Ensure we have a valid range
+  if (startIndex >= endIndex) {
+    return { elevationGain: 0, elevationLoss: 0 };
+  }
+
+  console.log(`Calculating elevation between indices ${startIndex} and ${endIndex}`);
+
+  let elevationGain = 0;
+  let elevationLoss = 0;
+
+  // Calculate elevation changes between consecutive track points in the range
+  for (let i = startIndex + 1; i <= endIndex && i < trackPoints.length; i++) {
+    const prevElevation = trackPoints[i - 1].elevation || 0;
+    const currentElevation = trackPoints[i].elevation || 0;
+    
+    const elevationChange = currentElevation - prevElevation;
+    
+    if (elevationChange > 0) {
+      elevationGain += elevationChange;
+    } else {
+      elevationLoss += Math.abs(elevationChange);
+    }
+  }
+
+  console.log(`Elevation gain: ${elevationGain}m, loss: ${elevationLoss}m`);
+
+  return { elevationGain, elevationLoss };
+}
+
+/**
+ * Format elevation gain/loss for display
+ * @param elevationGainMeters - Elevation gain in meters
+ * @param elevationLossMeters - Elevation loss in meters
+ * @returns Formatted string like "+1,100 / -2,100"
+ */
+export function formatElevationGainLoss(elevationGainMeters: number, elevationLossMeters: number): string {
+  // Convert meters to feet
+  const gainFeet = Math.round(elevationGainMeters * 3.28084);
+  const lossFeet = Math.round(elevationLossMeters * 3.28084);
+  
+  if (gainFeet === 0 && lossFeet === 0) {
+    return 'No change';
+  }
+  
+  // Format with commas for thousands
+  const formatNumber = (num: number) => num.toLocaleString();
+  
+  return `+${formatNumber(gainFeet)} / -${formatNumber(lossFeet)}`;
+}
+
+/**
  * Calculate waypoint distances along track points
  * @param waypoints - Array of waypoints
  * @param trackPoints - Array of track points
- * @returns Array of waypoints with legDistance and cumulativeDistance
+ * @returns Array of waypoints with legDistance, cumulativeDistance, and elevation data
  */
-export function calculateWaypointDistances(waypoints: any[], trackPoints: any[]): Array<any & { legDistance: number; cumulativeDistance: number }> {
+export function calculateWaypointDistances(waypoints: any[], trackPoints: any[]): Array<any & { 
+  legDistance: number; 
+  cumulativeDistance: number;
+  legElevationGain?: number;
+  legElevationLoss?: number;
+  elevationGainLossDisplay?: string;
+}> {
   if (waypoints.length === 0 || trackPoints.length === 0) return [];
   
   const sortedWaypoints = [...waypoints].sort((a, b) => a.order_index - b.order_index);
@@ -366,10 +472,29 @@ export function calculateWaypointDistances(waypoints: any[], trackPoints: any[])
       
       const legDistance = i === 0 ? 0 : Math.max(0, closestCumulativeDistance - previousCumulativeDistance);
       
+      // Calculate elevation gain/loss for this leg
+      let legElevationGain = 0;
+      let legElevationLoss = 0;
+      let elevationGainLossDisplay = 'Start';
+      
+      if (i > 0) {
+        const elevationStats = calculateElevationGainLossBetweenWaypoints(
+          sortedWaypoints[i - 1],
+          sortedWaypoints[i],
+          trackPoints
+        );
+        legElevationGain = elevationStats.elevationGain;
+        legElevationLoss = elevationStats.elevationLoss;
+        elevationGainLossDisplay = formatElevationGainLoss(legElevationGain, legElevationLoss);
+      }
+      
       results.push({
         ...waypoint,
         legDistance,
-        cumulativeDistance: closestCumulativeDistance
+        cumulativeDistance: closestCumulativeDistance,
+        legElevationGain,
+        legElevationLoss,
+        elevationGainLossDisplay
       });
       
       previousCumulativeDistance = closestCumulativeDistance;
@@ -421,10 +546,29 @@ export function calculateWaypointDistances(waypoints: any[], trackPoints: any[])
       cumulativeDistance += legDistance;
     }
     
+    // Calculate elevation gain/loss for this leg using the new method
+    let legElevationGain = 0;
+    let legElevationLoss = 0;
+    let elevationGainLossDisplay = 'Start';
+    
+    if (i > 0) {
+      const elevationStats = calculateElevationGainLossBetweenWaypoints(
+        sortedWaypoints[i - 1],
+        sortedWaypoints[i],
+        trackPoints
+      );
+      legElevationGain = elevationStats.elevationGain;
+      legElevationLoss = elevationStats.elevationLoss;
+      elevationGainLossDisplay = formatElevationGainLoss(legElevationGain, legElevationLoss);
+    }
+    
     results.push({
       ...waypoint,
       legDistance,
-      cumulativeDistance
+      cumulativeDistance,
+      legElevationGain,
+      legElevationLoss,
+      elevationGainLossDisplay
     });
   }
   

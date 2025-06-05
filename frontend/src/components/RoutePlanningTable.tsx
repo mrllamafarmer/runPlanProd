@@ -201,7 +201,7 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                 Rest Time
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Elevation
+                Elevation Gain/Loss
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Actions
@@ -296,7 +296,7 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
                   )}
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {waypoint.elevation_meters ? `${Math.round(waypoint.elevation_meters * 3.28084)} ft` : 'N/A'}
+                  {waypoint.elevationGainLossDisplay || (index === 0 ? 'Start' : 'N/A')}
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                   {editingWaypoint === waypoint.id ? (
