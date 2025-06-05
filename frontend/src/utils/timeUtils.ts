@@ -411,9 +411,10 @@ export function formatElevationGainLoss(elevationGainMeters: number, elevationLo
  * Calculate waypoint distances along track points
  * @param waypoints - Array of waypoints
  * @param trackPoints - Array of track points
+ * @param actualRouteDistanceMiles - Actual route distance in miles (optional, for fallback calculation)
  * @returns Array of waypoints with legDistance, cumulativeDistance, and elevation data
  */
-export function calculateWaypointDistances(waypoints: any[], trackPoints: any[]): Array<any & { 
+export function calculateWaypointDistances(waypoints: any[], trackPoints: any[], actualRouteDistanceMiles?: number): Array<any & { 
   legDistance: number; 
   cumulativeDistance: number;
   legElevationGain?: number;
@@ -528,8 +529,21 @@ export function calculateWaypointDistances(waypoints: any[], trackPoints: any[])
     }
   }
   
-  // Use 103 miles as the known total route distance
-  const knownTotalDistance = 103;
+  // Use actual route distance if provided, otherwise try to calculate from track points
+  let knownTotalDistance = actualRouteDistanceMiles || 0;
+  
+  // If no distance provided, try to get it from track points
+  if (!knownTotalDistance && trackPoints.length > 0) {
+    const lastTrackPoint = trackPoints[trackPoints.length - 1];
+    if (lastTrackPoint?.cumulativeDistance) {
+      knownTotalDistance = lastTrackPoint.cumulativeDistance * 0.000621371; // Convert meters to miles
+    }
+  }
+  
+  // Final fallback - use straight line distance scaled up by typical route factor
+  if (!knownTotalDistance) {
+    knownTotalDistance = totalStraightLineDistance * 1.2; // Assume 20% longer than straight line
+  }
   
   // Scale the distances proportionally
   const results = [];

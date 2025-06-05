@@ -422,7 +422,8 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
   };
 
   // Calculate distances for display
-  const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
+  const actualRouteDistanceMiles = currentRoute?.totalDistance ? (currentRoute.totalDistance / 1609.34) : undefined;
+  const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints, actualRouteDistanceMiles);
 
   const formatDistance = (miles: number) => {
     return miles.toFixed(2);

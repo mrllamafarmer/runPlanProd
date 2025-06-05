@@ -132,7 +132,7 @@ export default function TargetTimeControls() {
     // Get elevation adjustment summary if waypoints exist
     let elevationSummary = null;
     if (routeWaypoints && routeWaypoints.length > 0 && trackPoints && trackPoints.length > 0) {
-      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
+      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints, totalDistanceMiles);
       elevationSummary = getElevationAdjustmentSummary(waypointsWithDistances);
     }
 
@@ -154,7 +154,7 @@ export default function TargetTimeControls() {
       let cumulativeTime = 0;  // Cumulative time including all previous legs and rest
 
       // Use the same distance calculation logic as the waypoint table
-      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
+      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints, totalDistanceMiles);
       
       // Apply elevation-adjusted pacing calculations
       const elevationAdjustedWaypoints = calculateElevationAdjustedLegTimes(
