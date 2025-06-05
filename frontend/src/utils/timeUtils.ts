@@ -573,4 +573,153 @@ export function calculateWaypointDistances(waypoints: any[], trackPoints: any[])
   }
   
   return results;
+}
+
+/**
+ * Calculate elevation-adjusted leg times based on elevation relative to route average
+ * @param waypointsWithDistances - Array of waypoints with distances and elevation data
+ * @param totalMovingTimeSeconds - Total moving time in seconds
+ * @param slowdownFactorPercent - Linear slowdown factor percentage (0-100)
+ * @returns Array of waypoints with adjusted leg times and paces
+ */
+export function calculateElevationAdjustedLegTimes(
+  waypointsWithDistances: Array<any & { 
+    legDistance: number; 
+    cumulativeDistance: number;
+    legElevationGain?: number;
+    legElevationLoss?: number;
+  }>,
+  totalMovingTimeSeconds: number,
+  slowdownFactorPercent: number = 0
+): Array<any & { 
+  legDistance: number; 
+  cumulativeDistance: number;
+  legElevationGain?: number;
+  legElevationLoss?: number;
+  elevationAdjustedLegTime?: number;
+  elevationAdjustedPace?: number;
+  elevationAdjustedPaceDisplay?: string;
+}> {
+  if (waypointsWithDistances.length === 0 || totalMovingTimeSeconds <= 0) {
+    return waypointsWithDistances;
+  }
+
+  // Calculate route totals
+  const totalDistance = waypointsWithDistances[waypointsWithDistances.length - 1]?.cumulativeDistance || 0;
+  if (totalDistance <= 0) return waypointsWithDistances;
+
+  const totalElevationGain = waypointsWithDistances.reduce((sum, wp) => sum + (wp.legElevationGain || 0), 0);
+  const totalElevationLoss = waypointsWithDistances.reduce((sum, wp) => sum + (wp.legElevationLoss || 0), 0);
+  
+  // Calculate route average elevation rates (in meters per mile)
+  const routeAvgGainPerMile = totalElevationGain / totalDistance;
+  const routeAvgLossPerMile = totalElevationLoss / totalDistance;
+
+  // Apply linear slowdown factor first to get base leg times
+  const baseLegTimes = waypointsWithDistances.map((waypoint, index) => {
+    if (index === 0 || waypoint.legDistance <= 0) return 0;
+    
+    return calculateLegTimeWithSlowdown(
+      waypoint.cumulativeDistance - waypoint.legDistance,
+      waypoint.cumulativeDistance,
+      totalDistance,
+      totalMovingTimeSeconds,
+      slowdownFactorPercent
+    );
+  });
+
+  // Calculate elevation multipliers for each leg
+  const elevationMultipliers = waypointsWithDistances.map((waypoint, index) => {
+    if (index === 0 || waypoint.legDistance <= 0) return 1.0;
+
+    const legGainPerMile = (waypoint.legElevationGain || 0) / waypoint.legDistance;
+    const legLossPerMile = (waypoint.legElevationLoss || 0) / waypoint.legDistance;
+    
+    // Calculate excess elevation gain/loss compared to route average
+    const excessGainPerMile = legGainPerMile - routeAvgGainPerMile;
+    const excessLossPerMile = legLossPerMile - routeAvgLossPerMile;
+    
+    // Convert meters to feet for the 30ft increment calculations
+    const excessGainFeetPerMile = excessGainPerMile * 3.28084;
+    const excessLossFeetPerMile = excessLossPerMile * 3.28084;
+    
+    // Apply 5% slowdown per 30ft excess gain, 4% speedup per 30ft excess loss
+    const gainMultiplier = 1 + (excessGainFeetPerMile / 30) * 0.05;
+    const lossMultiplier = 1 - (excessLossFeetPerMile / 30) * 0.04;
+    
+    // Combine the multipliers
+    return gainMultiplier * lossMultiplier;
+  });
+
+  // Apply elevation multipliers to base leg times
+  const elevationAdjustedTimes = baseLegTimes.map((baseTime, index) => {
+    return baseTime * elevationMultipliers[index];
+  });
+
+  // Calculate scaling factor to maintain total moving time
+  const totalAdjustedTime = elevationAdjustedTimes.reduce((sum, time) => sum + time, 0);
+  const scalingFactor = totalAdjustedTime > 0 ? totalMovingTimeSeconds / totalAdjustedTime : 1;
+
+  // Apply scaling factor and calculate final values
+  return waypointsWithDistances.map((waypoint, index) => {
+    const elevationAdjustedLegTime = elevationAdjustedTimes[index] * scalingFactor;
+    const elevationAdjustedPace = waypoint.legDistance > 0 ? elevationAdjustedLegTime / waypoint.legDistance : 0;
+    const elevationAdjustedPaceDisplay = elevationAdjustedPace > 0 ? formatPacePerMile(elevationAdjustedPace) : '';
+
+    return {
+      ...waypoint,
+      elevationAdjustedLegTime,
+      elevationAdjustedPace,
+      elevationAdjustedPaceDisplay
+    };
+  });
+}
+
+/**
+ * Get elevation adjustment summary for a route
+ * @param waypointsWithDistances - Array of waypoints with elevation data
+ * @returns Summary of elevation adjustments
+ */
+export function getElevationAdjustmentSummary(
+  waypointsWithDistances: Array<any & { 
+    legDistance: number; 
+    cumulativeDistance: number;
+    legElevationGain?: number;
+    legElevationLoss?: number;
+  }>
+): {
+  totalGainFeet: number;
+  totalLossFeet: number;
+  avgGainPerMile: number;
+  avgLossPerMile: number;
+  totalDistance: number;
+} {
+  if (waypointsWithDistances.length === 0) {
+    return {
+      totalGainFeet: 0,
+      totalLossFeet: 0,
+      avgGainPerMile: 0,
+      avgLossPerMile: 0,
+      totalDistance: 0
+    };
+  }
+
+  const totalDistance = waypointsWithDistances[waypointsWithDistances.length - 1]?.cumulativeDistance || 0;
+  const totalElevationGain = waypointsWithDistances.reduce((sum, wp) => sum + (wp.legElevationGain || 0), 0);
+  const totalElevationLoss = waypointsWithDistances.reduce((sum, wp) => sum + (wp.legElevationLoss || 0), 0);
+
+  // Convert meters to feet
+  const totalGainFeet = totalElevationGain * 3.28084;
+  const totalLossFeet = totalElevationLoss * 3.28084;
+  
+  const avgGainPerMile = totalDistance > 0 ? totalGainFeet / totalDistance : 0;
+  const avgLossPerMile = totalDistance > 0 ? totalLossFeet / totalDistance : 0;
+
+  return {
+    totalGainFeet,
+    totalLossFeet,
+    avgGainPerMile,
+    avgLossPerMile,
+    totalDistance
+  };
 } 

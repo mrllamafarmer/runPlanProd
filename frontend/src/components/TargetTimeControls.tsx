@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calculator, Target, TrendingDown } from 'lucide-react';
+import { Clock, Calculator, Target, TrendingDown, Mountain } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
 import { 
@@ -11,7 +11,9 @@ import {
   getPaceRangeInfo,
   calculateLegTimeWithSlowdown,
   calculateLegAveragePace,
-  calculateWaypointDistances
+  calculateWaypointDistances,
+  calculateElevationAdjustedLegTimes,
+  getElevationAdjustmentSummary
 } from '../utils/timeUtils';
 
 export default function TargetTimeControls() {
@@ -126,6 +128,13 @@ export default function TargetTimeControls() {
 
     // Get pace range information with slowdown factor
     const paceRangeInfo = getPaceRangeInfo(movingTimeSeconds, totalDistanceMiles, slowdownFactorPercent);
+    
+    // Get elevation adjustment summary if waypoints exist
+    let elevationSummary = null;
+    if (routeWaypoints && routeWaypoints.length > 0 && trackPoints && trackPoints.length > 0) {
+      const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
+      elevationSummary = getElevationAdjustmentSummary(waypointsWithDistances);
+    }
 
     // Calculate leg-by-leg breakdown if waypoints exist
     let legBreakdown: Array<{
@@ -135,6 +144,7 @@ export default function TargetTimeControls() {
       endDistance: number;
       legTime: number;
       averagePace: string;
+      elevationAdjustedPace?: string;
       arrivalTime: number;  // Time to arrive at this waypoint (before taking rest)
       restTime: number;
       arrivalTimeOfDay: string; // Actual time of day
@@ -146,16 +156,24 @@ export default function TargetTimeControls() {
       // Use the same distance calculation logic as the waypoint table
       const waypointsWithDistances = calculateWaypointDistances(routeWaypoints, trackPoints);
       
+      // Apply elevation-adjusted pacing calculations
+      const elevationAdjustedWaypoints = calculateElevationAdjustedLegTimes(
+        waypointsWithDistances,
+        movingTimeSeconds,
+        slowdownFactorPercent
+      );
+      
       // Calculate cumulative distances from start of route
       let routeCumulativeDistance = 0;
       
-      for (let index = 0; index < waypointsWithDistances.length; index++) {
-        const waypoint = waypointsWithDistances[index];
+      for (let index = 0; index < elevationAdjustedWaypoints.length; index++) {
+        const waypoint = elevationAdjustedWaypoints[index];
         const legStartDistance = routeCumulativeDistance;
         const legDistance = waypoint.legDistance;
         const legEndDistance = legStartDistance + legDistance;
         
-        const legTime = calculateLegTimeWithSlowdown(
+        // Use elevation-adjusted time if available, otherwise fall back to linear slowdown
+        const legTime = waypoint.elevationAdjustedLegTime || calculateLegTimeWithSlowdown(
           legStartDistance,
           legEndDistance,  
           totalDistanceMiles,
@@ -183,6 +201,7 @@ export default function TargetTimeControls() {
           endDistance: legEndDistance,
           legTime,
           averagePace: formatPacePerMile(legAveragePace),
+          elevationAdjustedPace: waypoint.elevationAdjustedPaceDisplay,
           arrivalTime: cumulativeTime,  // Cumulative time at arrival (before rest)
           restTime,
           arrivalTimeOfDay: calculateArrivalTime(startTimeInput, cumulativeTime)
@@ -239,6 +258,7 @@ export default function TargetTimeControls() {
       movingTime: secondsToHHMMSS(movingTimeSeconds),
       restTime: secondsToHHMMSS(totalRestTimeSeconds),
       paceRange: paceRangeInfo,
+      elevationSummary,
       legBreakdown
     };
   }, [targetTimeSeconds, totalDistanceMiles, totalRestTimeSeconds, slowdownFactorPercent, routeWaypoints, trackPoints, startTimeInput]);
@@ -561,6 +581,37 @@ export default function TargetTimeControls() {
             </div>
           </div>
 
+          {/* Elevation Summary */}
+          {paceCalculations.elevationSummary && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h5 className="font-medium text-gray-700 mb-3 flex items-center">
+                <Mountain className="h-4 w-4 mr-2" />
+                Elevation Summary
+              </h5>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Total Gain:</span>
+                  <span className="ml-2 font-medium">{Math.round(paceCalculations.elevationSummary.totalGainFeet).toLocaleString()} ft</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Total Loss:</span>
+                  <span className="ml-2 font-medium">{Math.round(paceCalculations.elevationSummary.totalLossFeet).toLocaleString()} ft</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Avg Gain/Mile:</span>
+                  <span className="ml-2 font-medium">{Math.round(paceCalculations.elevationSummary.avgGainPerMile)} ft/mi</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Avg Loss/Mile:</span>
+                  <span className="ml-2 font-medium">{Math.round(paceCalculations.elevationSummary.avgLossPerMile)} ft/mi</span>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-gray-500">
+                📈 Leg paces are adjusted for elevation: +5% per 30ft excess climb, -4% per 30ft excess descent
+              </p>
+            </div>
+          )}
+
           {/* Time Breakdown */}
           <div className="mt-6 pt-4 border-t border-gray-200">
             <h5 className="font-medium text-gray-700 mb-3">Time Breakdown</h5>
@@ -590,7 +641,10 @@ export default function TargetTimeControls() {
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Leg</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Distance</th>
-                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Avg Pace</th>
+                      <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Base Pace</th>
+                      {paceCalculations.elevationSummary && (
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Elev. Adj. Pace</th>
+                      )}
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Leg Time</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Cumulative Time</th>
                       <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">Rest</th>
@@ -604,7 +658,12 @@ export default function TargetTimeControls() {
                       <tr key={index} className="border-b border-gray-100">
                         <td className="px-3 py-2 font-medium">{leg.legName}</td>
                         <td className="px-3 py-2">{leg.distance.toFixed(2)} mi</td>
-                        <td className="px-3 py-2 font-mono">{leg.averagePace}</td>
+                        <td className="px-3 py-2 font-mono text-gray-600">{leg.averagePace}</td>
+                        {paceCalculations.elevationSummary && (
+                          <td className="px-3 py-2 font-mono font-bold text-orange-700">
+                            {leg.elevationAdjustedPace || leg.averagePace}
+                          </td>
+                        )}
                         <td className="px-3 py-2">{secondsToHHMMSS(leg.legTime)}</td>
                         <td className="px-3 py-2 font-medium">{secondsToHHMMSS(leg.arrivalTime)}</td>
                         <td className="px-3 py-2">{leg.restTime > 0 ? secondsToHHMMSS(leg.restTime) : '-'}</td>
@@ -621,6 +680,7 @@ export default function TargetTimeControls() {
               <p className="mt-2 text-xs text-gray-500">
                 💡 Cumulative Time = time to reach waypoint (before rest). 
                 {slowdownFactorPercent > 0 ? ' Variable pacing with slowdown factor applied.' : ' Constant pacing applied.'}
+                {paceCalculations.elevationSummary && ' Elevation-adjusted paces account for climbing/descending relative to route average.'}
                 {startTimeInput && ' Time of Day shows actual arrival time based on start time.'}
               </p>
             </div>
