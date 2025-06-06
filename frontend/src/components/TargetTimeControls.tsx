@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Clock, Calculator, Target, TrendingDown, Mountain } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { routeApi, handleApiError } from '../services/api';
+import PdfExport from './PdfExport';
 import { 
   secondsToHHMMSS, 
   hhmmssToSeconds, 
@@ -559,10 +560,13 @@ export default function TargetTimeControls() {
       {/* Pace Calculations Display */}
       {paceCalculations && (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
-          <h4 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
-            <Calculator className="h-5 w-5 mr-2" />
-            Pace Calculations
-          </h4>
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-lg font-semibold flex items-center text-gray-800">
+              <Calculator className="h-5 w-5 mr-2" />
+              Pace Calculations
+            </h4>
+            <PdfExport />
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Overall Pace */}

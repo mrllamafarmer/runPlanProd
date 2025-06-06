@@ -1,4 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
+import PdfExport from './PdfExport';
 
 interface RouteSummaryProps {
   fileInfo: any;
@@ -26,13 +27,18 @@ export default function RouteSummary({ fileInfo }: RouteSummaryProps) {
   
   return (
     <div className="bg-green-50 p-4 rounded-lg">
-      <h3 className="font-semibold text-green-800">Route Information</h3>
-      <p className="text-green-700">Route: {routeName}</p>
-      <p className="text-green-700">Distance: {distanceInMiles.toFixed(1)} miles</p>
-      <p className="text-green-700">Track Points: {trackPointCount}</p>
-      {hasValidTime && (
-        <p className="text-green-700">✓ Contains time data</p>
-      )}
+      <div className="flex justify-between items-start">
+        <div>
+          <h3 className="font-semibold text-green-800">Route Information</h3>
+          <p className="text-green-700">Route: {routeName}</p>
+          <p className="text-green-700">Distance: {distanceInMiles.toFixed(1)} miles</p>
+          <p className="text-green-700">Track Points: {trackPointCount}</p>
+          {hasValidTime && (
+            <p className="text-green-700">✓ Contains time data</p>
+          )}
+        </div>
+        <PdfExport className="mt-1" />
+      </div>
     </div>
   );
 } 
