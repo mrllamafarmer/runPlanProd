@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 # Database configuration from environment variables
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql://runplan_user:runplan_secure_password_123@localhost:5432/runplanprod"
+    "postgresql://runplan_user:runplan_secure_password_123@localhost:5433/runplanprod"
 )
 
 def get_db_connection():

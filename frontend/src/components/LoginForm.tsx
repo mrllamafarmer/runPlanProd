@@ -77,7 +77,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
                   value={formData.username_or_email}
                   onChange={handleChange}
                   className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="admin or admin@runplanprod.com"
+                  placeholder="Enter your username or email"
                 />
               </div>
             </div>
@@ -114,15 +114,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             </div>
           </form>
 
-          <div className="mt-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <h3 className="text-sm font-medium text-blue-800 mb-2">Demo Credentials:</h3>
-              <div className="text-sm text-blue-700">
-                <p><strong>Username:</strong> admin</p>
-                <p><strong>Password:</strong> admin123456</p>
-              </div>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>
