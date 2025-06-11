@@ -1,5 +1,5 @@
--- Multi-user Route Planning Database Schema
--- Optimized for storage efficiency while maintaining functionality
+-- Multi-user Route Planning Database Schema - CORRECTED VERSION
+-- Includes all missing columns and structural fixes
 -- PostgreSQL Version
 
 -- Users table for authentication
