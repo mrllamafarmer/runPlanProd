@@ -22,6 +22,8 @@ CREATE TABLE routes (
     total_distance_meters REAL DEFAULT 0,
     total_elevation_gain_meters REAL DEFAULT 0,
     estimated_time_seconds INTEGER DEFAULT 0,
+    slowdown_factor_percent REAL DEFAULT 0,
+    start_time TIME,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_public BOOLEAN DEFAULT FALSE,
