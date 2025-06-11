@@ -6,6 +6,7 @@ import AnalyzerTab from './components/AnalyzerTab';
 import SavedRoutesTab from './components/SavedRoutesTab';
 import ToastContainer from './components/ToastContainer';
 import LoginForm from './components/LoginForm';
+import RegistrationForm from './components/RegistrationForm';
 import { authApi } from './services/api';
 import './index.css';
 
@@ -13,6 +14,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showRegistration, setShowRegistration] = useState(false);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -49,6 +51,11 @@ function App() {
     setIsAuthenticated(true);
   };
 
+  const handleRegistrationSuccess = (userData: any) => {
+    setCurrentUser(userData);
+    setIsAuthenticated(true);
+  };
+
   const handleLogout = () => {
     authApi.logout();
     setCurrentUser(null);
@@ -67,7 +74,21 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginForm onLoginSuccess={handleLoginSuccess} />;
+    if (showRegistration) {
+      return (
+        <RegistrationForm 
+          onRegistrationSuccess={handleRegistrationSuccess}
+          onSwitchToLogin={() => setShowRegistration(false)}
+        />
+      );
+    } else {
+      return (
+        <LoginForm 
+          onLoginSuccess={handleLoginSuccess}
+          onSwitchToRegister={() => setShowRegistration(true)}
+        />
+      );
+    }
   }
 
   return (

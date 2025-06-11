@@ -4,9 +4,10 @@ import { authApi, handleApiError } from '../services/api';
 
 interface LoginFormProps {
   onLoginSuccess: (userData: any) => void;
+  onSwitchToRegister?: () => void;
 }
 
-const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess, onSwitchToRegister }) => {
   const [formData, setFormData] = useState({
     username_or_email: '',
     password: ''
@@ -114,7 +115,23 @@ const LoginForm: React.FC<LoginFormProps> = ({ onLoginSuccess }) => {
             </div>
           </form>
 
-
+          {/* Switch to Registration */}
+          {onSwitchToRegister && (
+            <div className="mt-6">
+              <div className="text-center">
+                <span className="text-sm text-gray-600">
+                  Don't have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={onSwitchToRegister}
+                    className="font-medium text-primary-600 hover:text-primary-500 transition-colors"
+                  >
+                    Create account
+                  </button>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
