@@ -20,7 +20,7 @@ export default function WaypointEditModal({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    waypoint_type: 'checkpoint' as 'start' | 'checkpoint' | 'finish' | 'poi',
+    waypoint_type: 'checkpoint' as 'start' | 'checkpoint' | 'finish' | 'poi' | 'crew' | 'food_water' | 'rest',
     rest_time_mmss: '00:00'
   });
   const [isSaving, setIsSaving] = useState(false);
@@ -114,8 +114,8 @@ export default function WaypointEditModal({
   if (!isOpen || !waypoint) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto border border-gray-200">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-gray-900">
@@ -149,13 +149,44 @@ export default function WaypointEditModal({
                 type="text"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-3 py-2 border rounded-md shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white ${
                   errors.name ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
                 }`}
                 placeholder="Enter waypoint name"
                 disabled={isSaving}
+                style={{ 
+                  backgroundColor: '#ffffff !important',
+                  backgroundImage: 'none !important',
+                  opacity: '1 !important',
+                  color: '#000000 !important'
+                }}
               />
               {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name}</p>}
+            </div>
+
+            {/* Notes/Description - moved to appear right after name */}
+            <div>
+              <label htmlFor="waypoint-notes" className="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+              </label>
+              <textarea
+                id="waypoint-notes"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                rows={3}
+                className={`w-full px-3 py-2 border rounded-md shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white ${
+                  errors.description ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                }`}
+                placeholder="Add notes or description for this waypoint..."
+                disabled={isSaving}
+                style={{ 
+                  backgroundColor: '#ffffff !important',
+                  backgroundImage: 'none !important',
+                  opacity: '1 !important',
+                  color: '#000000 !important'
+                }}
+              />
+              {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description}</p>}
             </div>
 
             {/* Waypoint Type */}
@@ -169,11 +200,20 @@ export default function WaypointEditModal({
                 onChange={(e) => handleInputChange('waypoint_type', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 disabled={isSaving}
+                style={{ 
+                  backgroundColor: '#ffffff !important',
+                  backgroundImage: 'none !important',
+                  opacity: '1 !important',
+                  color: '#000000 !important'
+                }}
               >
                 <option value="start">Start</option>
                 <option value="checkpoint">Checkpoint</option>
                 <option value="finish">Finish</option>
                 <option value="poi">Point of Interest</option>
+                <option value="crew">Crew</option>
+                <option value="food_water">Food / Water</option>
+                <option value="rest">Rest</option>
               </select>
             </div>
 
@@ -192,30 +232,17 @@ export default function WaypointEditModal({
                 }`}
                 placeholder="00:00"
                 disabled={isSaving}
+                style={{ 
+                  backgroundColor: '#ffffff !important',
+                  backgroundImage: 'none !important',
+                  opacity: '1 !important',
+                  color: '#000000 !important'
+                }}
               />
               {errors.rest_time_mmss && <p className="mt-1 text-sm text-red-600">{errors.rest_time_mmss}</p>}
               <p className="mt-1 text-xs text-gray-500">
                 Enter rest duration in minutes:seconds format. No limit for multiday races.
               </p>
-            </div>
-
-            {/* Notes/Description */}
-            <div>
-              <label htmlFor="waypoint-notes" className="block text-sm font-medium text-gray-700 mb-1">
-                Notes
-              </label>
-              <textarea
-                id="waypoint-notes"
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                rows={3}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.description ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
-                }`}
-                placeholder="Add notes or description for this waypoint..."
-                disabled={isSaving}
-              />
-              {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description}</p>}
             </div>
           </div>
 

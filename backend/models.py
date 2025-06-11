@@ -85,7 +85,7 @@ class WaypointCreate(BaseModel):
     longitude: float = Field(..., ge=-180, le=180)
     elevation_meters: Optional[float] = None
     order_index: int = Field(..., ge=0)
-    waypoint_type: str = Field("checkpoint", pattern="^(start|checkpoint|finish|poi)$")
+    waypoint_type: str = Field("checkpoint", pattern="^(start|checkpoint|finish|poi|crew|food_water|rest)$")
     target_pace_per_km_seconds: Optional[int] = Field(None, gt=0)
     rest_time_seconds: Optional[int] = Field(0, ge=0, description="Rest time in seconds")
 
@@ -98,7 +98,7 @@ class WaypointUpdate(BaseModel):
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     elevation_meters: Optional[float] = None
     order_index: Optional[int] = Field(None, ge=0)
-    waypoint_type: Optional[str] = Field(None, pattern="^(start|checkpoint|finish|poi)$")
+    waypoint_type: Optional[str] = Field(None, pattern="^(start|checkpoint|finish|poi|crew|food_water|rest)$")
     target_pace_per_km_seconds: Optional[int] = Field(None, gt=0)
     rest_time_seconds: Optional[int] = Field(None, ge=0, description="Rest time in seconds")
 

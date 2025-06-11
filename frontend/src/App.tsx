@@ -19,14 +19,23 @@ function App() {
     const checkAuth = async () => {
       try {
         const token = localStorage.getItem('access_token');
+        console.log('🔍 Authentication check - Token found:', !!token);
+        
         if (token) {
+          console.log('🔑 Validating token with backend...');
           const user = await authApi.getCurrentUser();
+          console.log('✅ Token valid, user authenticated:', user);
           setCurrentUser(user);
           setIsAuthenticated(true);
+        } else {
+          console.log('❌ No token found in localStorage');
         }
       } catch (error) {
         // Token is invalid or expired
+        console.log('❌ Token validation failed:', error);
         authApi.logout();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
       } finally {
         setIsLoading(false);
       }

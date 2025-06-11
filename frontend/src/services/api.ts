@@ -123,7 +123,7 @@ export const routeApi = {
     longitude: number;
     elevation_meters?: number;
     order_index: number;
-    waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi';
+    waypoint_type: 'start' | 'checkpoint' | 'finish' | 'poi' | 'crew' | 'food_water' | 'rest';
     target_pace_per_km_seconds?: number;
     rest_time_seconds?: number;
   }): Promise<{ waypoint_id: number; message: string }> => {
@@ -139,7 +139,7 @@ export const routeApi = {
     longitude?: number;
     elevation_meters?: number;
     order_index?: number;
-    waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi';
+    waypoint_type?: 'start' | 'checkpoint' | 'finish' | 'poi' | 'crew' | 'food_water' | 'rest';
     target_pace_per_km_seconds?: number;
     rest_time_seconds?: number;
   }): Promise<{ message: string }> => {

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 # Import application components
 from main import app
-from database import Database
+import database
 from logging_config import setup_logging
 
 @pytest.fixture(scope="session")
@@ -17,26 +17,52 @@ def test_logger():
 
 @pytest.fixture
 def test_db():
-    """Create a temporary test database"""
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tmp_file:
-        test_db_path = tmp_file.name
-    
-    # Create test database
-    db = Database(db_path=test_db_path)
-    
-    yield db
-    
-    # Cleanup
-    if os.path.exists(test_db_path):
-        os.unlink(test_db_path)
+    """Create a test database setup - using PostgreSQL functions"""
+    # For PostgreSQL-based testing, we'll use the existing database functions
+    # The test database should be set up via environment variables
+    yield database
 
 @pytest.fixture
-def client(test_db):
-    """Create a test client with test database"""
-    # Patch the database instance in main module
-    with patch('main.db', test_db):
-        with TestClient(app) as test_client:
-            yield test_client
+def test_user():
+    """Create a test user for testing"""
+    from auth import AuthManager
+    from models import UserCreate
+    
+    auth_manager = AuthManager()
+    
+    # Create a test user
+    test_username = "testuser"
+    test_email = "test@example.com"
+    test_password = "testpassword123"
+    
+    try:
+        # Try to create the user (will fail if already exists)
+        user_data = UserCreate(
+            username=test_username,
+            email=test_email,
+            password=test_password
+        )
+        result = auth_manager.register_user(user_data)
+        user_id = result['user_id']
+    except Exception:
+        # User might already exist, create one directly in the database
+        with database.get_db_cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO users (username, email, password_hash, created_at)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+                RETURNING id
+            """, (test_username, test_email, auth_manager.hash_password(test_password)))
+            result = cursor.fetchone()
+            user_id = result['id'] if result else 1
+    
+    return user_id
+
+@pytest.fixture
+def client():
+    """Create a test client"""
+    with TestClient(app) as test_client:
+        yield test_client
 
 @pytest.fixture
 def sample_route_data():

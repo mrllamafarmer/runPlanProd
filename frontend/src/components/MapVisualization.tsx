@@ -265,18 +265,24 @@ export default function MapVisualization({
     });
 
     // Enhanced waypoint icons
-    const getWaypointIcon = (type: 'start' | 'finish' | 'checkpoint' | 'poi') => {
-      const colors: Record<'start' | 'finish' | 'checkpoint' | 'poi', string> = {
+    const getWaypointIcon = (type: 'start' | 'finish' | 'checkpoint' | 'poi' | 'crew' | 'food_water' | 'rest') => {
+      const colors: Record<'start' | 'finish' | 'checkpoint' | 'poi' | 'crew' | 'food_water' | 'rest', string> = {
         start: '#10B981',
         finish: '#EF4444', 
         checkpoint: '#3B82F6',
-        poi: '#F59E0B'
+        poi: '#F59E0B',
+        crew: '#8B5CF6',
+        food_water: '#06B6D4',
+        rest: '#84CC16'
       };
-      const labels: Record<'start' | 'finish' | 'checkpoint' | 'poi', string> = {
+      const labels: Record<'start' | 'finish' | 'checkpoint' | 'poi' | 'crew' | 'food_water' | 'rest', string> = {
         start: 'S',
         finish: 'F',
         checkpoint: 'C',
-        poi: 'P'
+        poi: 'P',
+        crew: 'Cr',
+        food_water: 'F',
+        rest: 'R'
       };
       
       return L.divIcon({
@@ -375,8 +381,8 @@ export default function MapVisualization({
           .bindPopup(
             `<div class="enhanced-waypoint-popup">
               <strong>${waypoint.name}</strong><br/>
+              ${waypoint.description ? `<div style="margin: 4px 0; font-style: italic; color: #666;">${waypoint.description}</div>` : ''}
               Type: ${waypoint.waypoint_type}<br/>
-              ${waypoint.description ? `Description: ${waypoint.description}<br/>` : ''}
               ${waypoint.elevation_meters ? `Elevation: ${waypoint.elevation_meters.toFixed(0)}m<br/>` : ''}
               ${waypoint.rest_time_seconds ? `Rest Time: ${Math.floor(waypoint.rest_time_seconds / 60)}:${(waypoint.rest_time_seconds % 60).toString().padStart(2, '0')}<br/>` : ''}
               <div class="waypoint-actions" style="margin-top: 8px;">

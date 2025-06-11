@@ -86,6 +86,9 @@ class AuthManager:
     def register_user(self, user_data: UserCreate) -> Dict[str, Any]:
         """Register a new user."""
         try:
+            # Import here to avoid circular import
+            from invitation_manager import invitation_manager
+            
             # Validate input
             if not user_data.username or len(user_data.username.strip()) < 3:
                 raise ValidationError("Username must be at least 3 characters long")
@@ -95,6 +98,10 @@ class AuthManager:
             
             if not user_data.password or len(user_data.password) < 8:
                 raise ValidationError("Password must be at least 8 characters long")
+            
+            # Check if email is approved for registration
+            if not invitation_manager.is_email_approved(user_data.email.strip()):
+                raise ValidationError("Registration is by invitation only. Your email address has not been approved for registration.")
             
             # Check if user already exists
             conn = get_db_connection()

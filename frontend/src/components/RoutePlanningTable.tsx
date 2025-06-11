@@ -103,7 +103,7 @@ function SortableWaypointRow({
       </td>
       <td className="px-4 py-4 whitespace-nowrap">
         {editingWaypoint === waypoint.id ? (
-          <div className="space-y-2">
+          <div className="flex flex-col space-y-2 min-w-[200px]">
             <input
               type="text"
               value={editForm.name || ''}
@@ -114,10 +114,23 @@ function SortableWaypointRow({
             <textarea
               value={editForm.description || ''}
               onChange={(e) => onFormChange({ ...editForm, description: e.target.value })}
-              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-              placeholder="Description (optional)"
+              className="w-full px-2 py-1 border border-gray-300 rounded text-sm text-gray-600 placeholder-gray-400 resize-y min-h-[60px]"
+              placeholder="Notes..."
               rows={2}
             />
+            <select
+              value={editForm.waypoint_type || waypoint.waypoint_type}
+              onChange={(e) => onFormChange({ ...editForm, waypoint_type: e.target.value as any })}
+              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="start">Start</option>
+              <option value="checkpoint">Checkpoint</option>
+              <option value="finish">Finish</option>
+              <option value="poi">POI</option>
+              <option value="crew">Crew</option>
+              <option value="food_water">Food / Water</option>
+              <option value="rest">Rest</option>
+            </select>
           </div>
         ) : (
           <div>
@@ -130,16 +143,7 @@ function SortableWaypointRow({
       </td>
       <td className="px-4 py-4 whitespace-nowrap">
         {editingWaypoint === waypoint.id ? (
-          <select
-            value={editForm.waypoint_type || waypoint.waypoint_type}
-            onChange={(e) => onFormChange({ ...editForm, waypoint_type: e.target.value as any })}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
-          >
-            <option value="start">Start</option>
-            <option value="checkpoint">Checkpoint</option>
-            <option value="finish">Finish</option>
-            <option value="poi">POI</option>
-          </select>
+          <div className="text-sm text-gray-500 italic">Editing...</div>
         ) : (
           <div className="flex items-center">
             {getWaypointTypeIcon(waypoint.waypoint_type)}
@@ -440,6 +444,12 @@ export default function RoutePlanningTable({ trackPoints }: RoutePlanningTablePr
         return <Clock className={`${iconClass} text-blue-600`} />;
       case 'poi':
         return <Mountain className={`${iconClass} text-orange-600`} />;
+      case 'crew':
+        return <MapPin className={`${iconClass} text-purple-600`} />;
+      case 'food_water':
+        return <MapPin className={`${iconClass} text-cyan-600`} />;
+      case 'rest':
+        return <MapPin className={`${iconClass} text-lime-600`} />;
       default:
         return <MapPin className={`${iconClass} text-gray-600`} />;
     }

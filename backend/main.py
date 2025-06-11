@@ -184,15 +184,17 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Authentication Routes
 
-# REGISTRATION DISABLED - Admin users only
-# @app.post("/api/auth/register", response_model=UserResponse)
-# async def register(user_data: UserCreate):
-#     """Register a new user - DISABLED FOR SECURITY"""
-#     logger.info(f"Registration attempt blocked: {user_data.username}")
-#     raise HTTPException(
-#         status_code=status.HTTP_403_FORBIDDEN,
-#         detail="Registration is disabled. Contact administrator."
-#     )
+@app.post("/api/auth/register", response_model=UserResponse)
+async def register(user_data: UserCreate):
+    """Register a new user - requires approved email"""
+    logger.info(f"Registration attempt: {user_data.username}")
+    try:
+        result = auth_manager.register_user(user_data)
+        logger.info(f"User registration successful: {user_data.username}")
+        return UserResponse(**result)
+    except (ValidationError, AuthenticationError) as e:
+        logger.warning(f"Registration failed for {user_data.username}: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
 @app.post("/api/auth/login", response_model=UserResponse)
 async def login(login_data: UserLogin):
@@ -610,6 +612,154 @@ async def delete_route_endpoint(
     except Exception as e:
         logger.error(f"Unexpected error deleting route {route_id}: {e}")
         raise GPXAnalyzerException(f"Failed to delete route: {str(e)}")
+
+# Admin/Invitation Management Routes
+
+async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to check if current user is admin"""
+    from invitation_manager import invitation_manager
+    
+    if not invitation_manager.is_user_admin(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required"
+        )
+    return current_user
+
+@app.post("/api/admin/approve-email")
+async def approve_email_for_registration(
+    email_data: dict,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Approve an email address for registration"""
+    from invitation_manager import invitation_manager
+    
+    logger.info(f"Admin {admin_user.username} approving email for registration")
+    
+    try:
+        email = email_data.get("email", "").strip()
+        notes = email_data.get("notes", "")
+        
+        if not email or "@" not in email:
+            raise ValidationError("Invalid email address")
+        
+        result = invitation_manager.add_approved_email(
+            email=email,
+            invited_by_email=admin_user.email,
+            notes=notes,
+            admin_user_id=admin_user.id
+        )
+        
+        logger.info(f"Email {email} approved for registration by {admin_user.username}")
+        return result
+        
+    except ValidationError:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving email: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.delete("/api/admin/revoke-email/{email}")
+async def revoke_email_approval(
+    email: str,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Revoke email approval"""
+    from invitation_manager import invitation_manager
+    
+    logger.info(f"Admin {admin_user.username} revoking email approval for {email}")
+    
+    try:
+        result = invitation_manager.remove_approved_email(email, admin_user.id)
+        logger.info(f"Email approval revoked for {email} by {admin_user.username}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error revoking email approval: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.get("/api/admin/approved-emails")
+async def get_approved_emails(
+    include_inactive: bool = False,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Get list of approved emails"""
+    from invitation_manager import invitation_manager
+    
+    logger.info(f"Admin {admin_user.username} requesting approved emails list")
+    
+    try:
+        approved_emails = invitation_manager.get_approved_emails(include_inactive)
+        
+        return {
+            "approved_emails": [
+                {
+                    "id": email.id,
+                    "email": email.email,
+                    "invited_by": email.invited_by,
+                    "invited_at": email.invited_at.isoformat(),
+                    "registered_at": email.registered_at.isoformat() if email.registered_at else None,
+                    "is_active": email.is_active,
+                    "notes": email.notes
+                }
+                for email in approved_emails
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting approved emails: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.post("/api/admin/make-admin/{user_id}")
+async def make_user_admin(
+    user_id: int,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Grant admin privileges to a user"""
+    from invitation_manager import invitation_manager
+    
+    logger.info(f"Admin {admin_user.username} granting admin privileges to user {user_id}")
+    
+    try:
+        result = invitation_manager.make_user_admin(user_id, admin_user.id)
+        logger.info(f"Admin privileges granted to user {user_id} by {admin_user.username}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error granting admin privileges: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@app.get("/api/admin/invitation-logs")
+async def get_invitation_logs(
+    email: str = None,
+    limit: int = 100,
+    admin_user: User = Depends(get_admin_user)
+):
+    """Get invitation action logs"""
+    from invitation_manager import invitation_manager
+    
+    logger.info(f"Admin {admin_user.username} requesting invitation logs")
+    
+    try:
+        logs = invitation_manager.get_invitation_logs(email, limit)
+        
+        return {
+            "logs": [
+                {
+                    "id": log.id,
+                    "email": log.email,
+                    "action": log.action,
+                    "performed_by": log.performed_by,
+                    "performed_at": log.performed_at.isoformat(),
+                    "details": log.details
+                }
+                for log in logs
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting invitation logs: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @app.get("/health")
 async def health_check():

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Development frontend service for testing and development
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=false
+    networks:
+      - gpx-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+networks:
+  gpx-network:
+    external: true
+    name: runplanprod_gpx-network 

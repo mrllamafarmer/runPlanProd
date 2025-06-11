@@ -89,7 +89,28 @@ jest.mock('chart.js', () => ({
 jest.mock('react-chartjs-2', () => ({
   Line: jest.fn(() => {
     const MockCanvas = () => {
-      return document.createElement('canvas');
+      const mockCanvas = {
+        getContext: jest.fn(() => ({
+          fillRect: jest.fn(),
+          clearRect: jest.fn(),
+          getImageData: jest.fn(),
+          putImageData: jest.fn(),
+          createImageData: jest.fn(),
+          setTransform: jest.fn(),
+          drawImage: jest.fn(),
+          save: jest.fn(),
+          restore: jest.fn(),
+          beginPath: jest.fn(),
+          moveTo: jest.fn(),
+          lineTo: jest.fn(),
+          closePath: jest.fn(),
+          stroke: jest.fn(),
+          fill: jest.fn(),
+        })),
+        width: 500,
+        height: 500,
+      };
+      return mockCanvas;
     };
     MockCanvas.setAttribute = jest.fn();
     return MockCanvas;
