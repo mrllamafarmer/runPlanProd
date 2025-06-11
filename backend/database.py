@@ -188,32 +188,8 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
             track_points = route_data.get('trackPoints', [])
             logger.info(f"Processing {len(track_points)} track points for route {route_id}")
             if track_points:
-                # Create a single route segment for the entire route if we have waypoints
-                route_segment_id = None
-                logger.info(f"Start waypoint ID: {start_waypoint_id}, End waypoint ID: {end_waypoint_id}")
-                if start_waypoint_id and end_waypoint_id:
-                    logger.info("Creating route segment between existing waypoints")
-                    cursor.execute("""
-                        INSERT INTO route_segments (
-                            route_id, from_waypoint_id, to_waypoint_id,
-                            distance_meters, elevation_gain_meters, elevation_loss_meters
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (
-                        route_id,
-                        start_waypoint_id,
-                        end_waypoint_id,
-                        total_distance_meters,
-                        route_data.get('totalElevationGain', 0),
-                        route_data.get('totalElevationLoss', 0)
-                    ))
-                    
-                    segment_result = cursor.fetchone()
-                    route_segment_id = segment_result['id'] if segment_result else None
-                    logger.info(f"Created route segment with ID: {route_segment_id}")
-                
-                # If we don't have waypoints or segment creation failed, create default waypoints
-                if not route_segment_id and track_points:
+                # Create default waypoints from track points if none provided
+                if not waypoints:
                     logger.info("Creating default waypoints from track points")
                     # Create start and end waypoints from first and last track points
                     first_point = track_points[0]
@@ -250,64 +226,45 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                     ))
                     end_waypoint_id = cursor.fetchone()['id']
                     logger.info(f"Created end waypoint with ID: {end_waypoint_id}")
-                    
-                    # Create route segment
-                    cursor.execute("""
-                        INSERT INTO route_segments (
-                            route_id, from_waypoint_id, to_waypoint_id,
-                            distance_meters, elevation_gain_meters, elevation_loss_meters
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
-                        RETURNING id
-                    """, (
-                        route_id, start_waypoint_id, end_waypoint_id,
-                        total_distance_meters,
-                        route_data.get('totalElevationGain', 0),
-                        route_data.get('totalElevationLoss', 0)
-                    ))
-                    route_segment_id = cursor.fetchone()['id']
-                    logger.info(f"Created route segment with ID: {route_segment_id}")
                 
-                # Save track points to the route segment
-                if route_segment_id:
-                    logger.info(f"Saving {len(track_points)} track points to route segment {route_segment_id}")
-                    for i, point in enumerate(track_points):
-                        cursor.execute("""
-                            INSERT INTO track_points (
-                                route_segment_id, latitude, longitude, elevation_meters,
-                                distance_from_segment_start_meters, point_index
-                            ) VALUES (%s, %s, %s, %s, %s, %s)
-                        """, (
-                            route_segment_id,
-                            point.get('latitude', point.get('lat')),  # Support both formats
-                            point.get('longitude', point.get('lon')),  # Support both formats
-                            point.get('elevation'),
-                            point.get('cumulativeDistance', point.get('distance', 0)),
-                            i
-                        ))
-                    
-                    logger.info(f"Saved {len(track_points)} track points for route {route_id}")
-                    
-                    # Save GPX file metadata
-                    file_content = route_data.get('gpxData', route_name)  # Use GPX data if available, otherwise filename
-                    file_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
-                    
+                # Save track points directly to route (no route segments needed)
+                logger.info(f"Saving {len(track_points)} track points to route {route_id}")
+                for i, point in enumerate(track_points):
                     cursor.execute("""
-                        INSERT INTO gpx_files (
-                            route_id, original_filename, file_hash,
-                            original_point_count, simplified_point_count, compression_ratio
+                        INSERT INTO track_points (
+                            route_id, latitude, longitude, elevation_meters,
+                            cumulative_distance_meters, point_index
                         ) VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
                         route_id,
-                        route_name,
-                        file_hash,
-                        len(track_points),  # Original points (TODO: could be different if we had raw GPX point count)
-                        len(track_points),  # Simplified points (same for now, until optimization implemented)
-                        1.0  # Compression ratio (1.0 = no compression for now)
+                        point.get('latitude', point.get('lat')),  # Support both formats
+                        point.get('longitude', point.get('lon')),  # Support both formats
+                        point.get('elevation'),
+                        point.get('cumulativeDistance', point.get('distance', 0)),
+                        i
                     ))
-                    
-                    logger.info(f"Saved GPX file metadata for route {route_id}")
-                else:
-                    logger.warning(f"No route segment created for route {route_id}, track points not saved")
+                
+                logger.info(f"Saved {len(track_points)} track points for route {route_id}")
+                
+                # Save GPX file metadata
+                file_content = route_data.get('gpxData', route_name)  # Use GPX data if available, otherwise filename
+                file_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                
+                cursor.execute("""
+                    INSERT INTO gpx_files (
+                        route_id, original_filename, file_hash,
+                        original_point_count, simplified_point_count, compression_ratio
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    route_id,
+                    route_name,
+                    file_hash,
+                    len(track_points),  # Original points (TODO: could be different if we had raw GPX point count)
+                    len(track_points),  # Simplified points (same for now, until optimization implemented)
+                    1.0  # Compression ratio (1.0 = no compression for now)
+                ))
+                
+                logger.info(f"Saved GPX file metadata for route {route_id}")
             
             logger.info(f"Route saved successfully for user {user_id} with ID {route_id}")
             return route_id
@@ -393,16 +350,15 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
             """, (route_id,))
             waypoints = cursor.fetchall()
             
-            # Get route segments and track points
+            # Get track points directly from route
             cursor.execute("""
-                SELECT rs.*, tp.latitude, tp.longitude, tp.elevation_meters,
-                       tp.distance_from_segment_start_meters, tp.point_index
-                FROM route_segments rs
-                LEFT JOIN track_points tp ON rs.id = tp.route_segment_id
-                WHERE rs.route_id = %s
-                ORDER BY rs.id, tp.point_index
+                SELECT latitude, longitude, elevation_meters,
+                       cumulative_distance_meters, point_index
+                FROM track_points
+                WHERE route_id = %s
+                ORDER BY point_index
             """, (route_id,))
-            segments_and_points = cursor.fetchall()
+            track_points = cursor.fetchall()
             
             # Build response
             result = {
@@ -425,14 +381,13 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
             }
             
             # Process track points
-            for segment_point in segments_and_points:
-                if segment_point['latitude']:  # Has track point data
-                    result['trackPoints'].append({
-                        'lat': segment_point['latitude'],
-                        'lon': segment_point['longitude'],
-                        'elevation': segment_point['elevation_meters'],
-                        'distance': segment_point['distance_from_segment_start_meters']
-                    })
+            for point in track_points:
+                result['trackPoints'].append({
+                    'lat': point['latitude'],
+                    'lon': point['longitude'],
+                    'elevation': point['elevation_meters'],
+                    'distance': point['cumulative_distance_meters']
+                })
             
             return result
             
@@ -495,7 +450,7 @@ def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) 
                 'name': 'name',
                 'description': 'description',
                 'is_public': 'is_public',
-                'target_time_seconds': 'estimated_time_seconds',  # Map target_time to estimated_time
+                'target_time_seconds': 'estimated_time_seconds',  # Map to existing column in production
                 'slowdown_factor_percent': 'slowdown_factor_percent',  # Map slowdown factor
                 'start_time': 'start_time'  # Map start time
             }

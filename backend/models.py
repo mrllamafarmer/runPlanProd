@@ -71,7 +71,7 @@ class Route(BaseModel):
     description: Optional[str]
     total_distance_meters: float
     total_elevation_gain_meters: float
-    estimated_time_seconds: int
+    target_time_seconds: int
     created_at: str
     updated_at: str
     is_public: bool
@@ -128,18 +128,19 @@ class RouteSegment(BaseModel):
     distance_meters: float
     elevation_gain_meters: float
     elevation_loss_meters: float
-    estimated_time_seconds: Optional[int]
+    target_time_seconds: Optional[int]
     created_at: str
 
 
 class TrackPointDB(BaseModel):
     """Model for simplified track points from database."""
     id: int
-    route_segment_id: int
+    route_id: int
     latitude: float
     longitude: float
     elevation_meters: Optional[float]
-    distance_from_segment_start_meters: float
+    cumulative_distance_meters: float
+    time_offset_seconds: Optional[float]
     point_index: int
 
 
