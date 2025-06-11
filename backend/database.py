@@ -288,7 +288,8 @@ def get_user_routes(user_id: int) -> List[Dict[str, Any]]:
             cursor.execute("""
                 SELECT 
                     id, name, description, total_distance_meters,
-                    total_elevation_gain_meters, estimated_time_seconds,
+                    total_elevation_gain_meters, total_elevation_loss_meters,
+                    target_time_seconds, slowdown_factor_percent, start_time,
                     created_at, updated_at, is_public
                 FROM routes 
                 WHERE user_id = %s 
@@ -306,8 +307,10 @@ def get_user_routes(user_id: int) -> List[Dict[str, Any]]:
                     'upload_date': route['created_at'].isoformat() if route['created_at'] else None,
                     'total_distance': route['total_distance_meters'] / 1000,  # Convert to km
                     'total_elevation_gain': route['total_elevation_gain_meters'],
-                    'total_elevation_loss': 0,  # TODO: Calculate this
-                    'target_time_seconds': route['estimated_time_seconds'],
+                    'total_elevation_loss': route['total_elevation_loss_meters'] or 0,
+                    'target_time_seconds': route['target_time_seconds'],
+                    'slowdown_factor_percent': route['slowdown_factor_percent'],
+                    'start_time': str(route['start_time']) if route['start_time'] else None,
                     'is_public': route['is_public']
                 })
             
@@ -368,8 +371,8 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
                     'description': route['description'],
                     'totalDistance': route['total_distance_meters'] / 1000,
                     'totalElevationGain': route['total_elevation_gain_meters'],
-                    'totalElevationLoss': 0,  # TODO: Calculate from track points if needed
-                    'targetTimeSeconds': route['estimated_time_seconds'],
+                    'totalElevationLoss': route['total_elevation_loss_meters'] or 0,
+                    'targetTimeSeconds': route['target_time_seconds'],
                     'slowdownFactorPercent': route['slowdown_factor_percent'],
                     'startTime': str(route['start_time']) if route['start_time'] else None,
                     'created_at': route['created_at'].isoformat() if route['created_at'] else None,
@@ -450,14 +453,38 @@ def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) 
                 'name': 'name',
                 'description': 'description',
                 'is_public': 'is_public',
-                'target_time_seconds': 'estimated_time_seconds',  # Map to existing column in production
-                'slowdown_factor_percent': 'slowdown_factor_percent',  # Map slowdown factor
-                'start_time': 'start_time'  # Map start time
+                'target_time_seconds': 'target_time_seconds',  # Updated to match current schema
+                'slowdown_factor_percent': 'slowdown_factor_percent',
+                'start_time': 'start_time'  # TIME type accepts HH:MM format directly
             }
             
             for field, value in update_data.items():
                 if field in field_mapping:
                     db_field = field_mapping[field]
+                    
+                    # Special handling for start_time to ensure proper TIME format
+                    if field == 'start_time' and value is not None:
+                        # Validate HH:MM format and convert if needed
+                        if isinstance(value, str) and ':' in value:
+                            try:
+                                # Validate time format
+                                time_parts = value.split(':')
+                                if len(time_parts) >= 2:
+                                    hours = int(time_parts[0])
+                                    minutes = int(time_parts[1])
+                                    if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                                        # Format as HH:MM for TIME type
+                                        formatted_time = f"{hours:02d}:{minutes:02d}"
+                                        update_fields.append(f"{db_field} = %s")
+                                        values.append(formatted_time)
+                                        continue
+                            except (ValueError, IndexError):
+                                logger.warning(f"Invalid start_time format: {value}, skipping")
+                                continue
+                        else:
+                            logger.warning(f"Invalid start_time value: {value}, skipping")
+                            continue
+                    
                     update_fields.append(f"{db_field} = %s")
                     values.append(value)
             
