@@ -55,13 +55,13 @@ class InvitationManager:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT is_email_approved(%s)
+                SELECT is_email_approved(%s) as approved
             """, (email,))
             
             result = cursor.fetchone()
             conn.close()
             
-            return result[0] if result else False
+            return result['approved'] if result else False
             
         except Exception as e:
             logger.error(f"Error checking email approval for {email}: {str(e)}")
@@ -74,13 +74,13 @@ class InvitationManager:
             cursor = conn.cursor()
             
             cursor.execute("""
-                SELECT is_user_admin(%s)
+                SELECT is_user_admin(%s) as is_admin
             """, (user_id,))
             
             result = cursor.fetchone()
             conn.close()
             
-            return result[0] if result else False
+            return result['is_admin'] if result else False
             
         except Exception as e:
             logger.error(f"Error checking admin status for user {user_id}: {str(e)}")
