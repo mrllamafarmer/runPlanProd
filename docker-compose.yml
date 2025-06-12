@@ -3,11 +3,12 @@ services:
   database:
     image: postgres:15-alpine
     restart: unless-stopped
+    env_file: .env
     environment:
-      POSTGRES_DB: runplanprod
-      POSTGRES_USER: runplan_user
-      POSTGRES_PASSWORD: runplan_secure_password_123
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/database_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
@@ -25,11 +26,12 @@ services:
   pgmanager:
     image: dpage/pgadmin4:latest
     restart: unless-stopped
+    env_file: .env
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@runplanprod.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: ${PGADMIN_CONFIG_SERVER_MODE}
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: ${PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED}
     ports:
       - "5051:80"
     volumes:
@@ -47,10 +49,18 @@ services:
     volumes:
       - ./data:/app/data
       - ./backend:/app
+    env_file: .env
     environment:
-      - PYTHONPATH=/app
-      - DATABASE_URL=postgresql://runplan_user:runplan_secure_password_123@database:5432/runplanprod
-      - JWT_SECRET_KEY=your-super-secure-jwt-secret-key-change-in-production
+      - PYTHONPATH=${PYTHONPATH}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SMTP_SERVER=${SMTP_SERVER}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - FROM_NAME=${FROM_NAME}
+      - FRONTEND_URL=${FRONTEND_URL}
     networks:
       - gpx-network
     depends_on:
@@ -71,8 +81,9 @@ services:
         condition: service_healthy
     networks:
       - gpx-network
+    env_file: .env
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV}
 
 networks:
   gpx-network:

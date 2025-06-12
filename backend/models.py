@@ -45,6 +45,17 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
 
 
+class PasswordResetRequest(BaseModel):
+    """Model for password reset request."""
+    email: str = Field(..., description="Email address for password reset")
+
+
+class PasswordResetConfirm(BaseModel):
+    """Model for password reset confirmation."""
+    token: str = Field(..., description="Password reset token from email")
+    new_password: str = Field(..., min_length=8, description="New password (minimum 8 characters)")
+
+
 # Route and GPX Models (Updated for Multi-user)
 class RouteCreate(BaseModel):
     """Model for creating a new route."""

@@ -7,6 +7,8 @@ import SavedRoutesTab from './components/SavedRoutesTab';
 import ToastContainer from './components/ToastContainer';
 import LoginForm from './components/LoginForm';
 import RegistrationForm from './components/RegistrationForm';
+import { PasswordResetRequestForm } from './components/PasswordResetRequestForm';
+import { PasswordResetConfirmForm } from './components/PasswordResetConfirmForm';
 import { authApi } from './services/api';
 import './index.css';
 
@@ -15,6 +17,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showRegistration, setShowRegistration] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -42,6 +46,16 @@ function App() {
         setIsLoading(false);
       }
     };
+
+    // Check for password reset token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    if (token) {
+      setResetToken(token);
+      setShowPasswordReset(true);
+      // Clear the token from URL for security
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
     checkAuth();
   }, []);
@@ -74,6 +88,29 @@ function App() {
   }
 
   if (!isAuthenticated) {
+    // Password reset with token
+    if (showPasswordReset && resetToken) {
+      return (
+        <PasswordResetConfirmForm 
+          token={resetToken}
+          onSuccess={() => {
+            setShowPasswordReset(false);
+            setResetToken(null);
+          }}
+        />
+      );
+    }
+    
+    // Password reset request
+    if (showPasswordReset) {
+      return (
+        <PasswordResetRequestForm 
+          onBackToLogin={() => setShowPasswordReset(false)}
+        />
+      );
+    }
+    
+    // Registration form
     if (showRegistration) {
       return (
         <RegistrationForm 
@@ -81,14 +118,16 @@ function App() {
           onSwitchToLogin={() => setShowRegistration(false)}
         />
       );
-    } else {
-      return (
-        <LoginForm 
-          onLoginSuccess={handleLoginSuccess}
-          onSwitchToRegister={() => setShowRegistration(true)}
-        />
-      );
     }
+    
+    // Login form (default)
+    return (
+      <LoginForm 
+        onLoginSuccess={handleLoginSuccess}
+        onSwitchToRegister={() => setShowRegistration(true)}
+        onForgotPassword={() => setShowPasswordReset(true)}
+      />
+    );
   }
 
   return (

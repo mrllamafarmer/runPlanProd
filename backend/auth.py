@@ -13,9 +13,10 @@ import jwt
 from passlib.context import CryptContext
 from passlib.hash import pbkdf2_sha256
 
-from models import UserCreate, UserLogin, User
+from models import UserCreate, UserLogin, User, PasswordResetRequest, PasswordResetConfirm
 from database import get_db_connection
 from exceptions import AuthenticationError, ValidationError
+from email_service import email_service
 from logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -312,6 +313,159 @@ class AuthManager:
         except Exception as e:
             logger.error(f"Error changing password for user {user_id}: {str(e)}")
             raise AuthenticationError("Failed to change password")
+    
+    def request_password_reset(self, email: str) -> bool:
+        """Generate and send password reset token."""
+        try:
+            # Validate email format
+            if not email or "@" not in email:
+                raise ValidationError("Invalid email address")
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Find user by email
+            cursor.execute(
+                "SELECT id, username, email, is_active FROM users WHERE email = %s AND is_active = TRUE",
+                (email.strip(),)
+            )
+            
+            user_row = cursor.fetchone()
+            
+            if not user_row:
+                # For security, don't reveal if email exists or not
+                # Just log and return success
+                logger.info(f"Password reset requested for non-existent email: {email}")
+                return True
+            
+            user_id = user_row['id']
+            username = user_row['username']
+            user_email = user_row['email']
+            
+            # Generate secure reset token
+            reset_token = secrets.token_urlsafe(32)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=1)  # 1 hour expiry
+            
+            # Deactivate any existing reset tokens for this user
+            cursor.execute(
+                "UPDATE password_reset_tokens SET is_active = FALSE WHERE user_id = %s AND is_active = TRUE",
+                (user_id,)
+            )
+            
+            # Insert new reset token
+            cursor.execute("""
+                INSERT INTO password_reset_tokens (user_id, token, expires_at)
+                VALUES (%s, %s, %s)
+            """, (user_id, reset_token, expires_at))
+            
+            conn.commit()
+            conn.close()
+            
+            # Send password reset email
+            email_sent = email_service.send_password_reset_email(user_email, username, reset_token)
+            
+            if email_sent:
+                logger.info(f"Password reset token generated and email sent for user: {username} (ID: {user_id})")
+            else:
+                logger.error(f"Password reset token generated but email failed for user: {username} (ID: {user_id})")
+            
+            return True  # Always return True for security (don't reveal if email exists)
+            
+        except ValidationError:
+            raise
+        except Exception as e:
+            logger.error(f"Error during password reset request for {email}: {str(e)}")
+            # For security, still return True
+            return True
+    
+    def confirm_password_reset(self, token: str, new_password: str) -> bool:
+        """Reset password using valid token."""
+        try:
+            # Validate new password
+            if not new_password or len(new_password) < 8:
+                raise ValidationError("New password must be at least 8 characters long")
+            
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Find valid, unused token
+            cursor.execute("""
+                SELECT rt.id, rt.user_id, rt.expires_at, u.username, u.email
+                FROM password_reset_tokens rt
+                JOIN users u ON rt.user_id = u.id
+                WHERE rt.token = %s 
+                  AND rt.is_active = TRUE 
+                  AND rt.used_at IS NULL 
+                  AND rt.expires_at > %s
+                  AND u.is_active = TRUE
+            """, (token, datetime.now(timezone.utc)))
+            
+            token_row = cursor.fetchone()
+            
+            if not token_row:
+                raise AuthenticationError("Invalid or expired reset token")
+            
+            token_id = token_row['id']
+            user_id = token_row['user_id']
+            username = token_row['username']
+            
+            # Hash new password
+            new_password_hash = self.hash_password(new_password)
+            
+            # Update user's password
+            cursor.execute("""
+                UPDATE users 
+                SET password_hash = %s, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = %s
+            """, (new_password_hash, user_id))
+            
+            # Mark token as used
+            cursor.execute("""
+                UPDATE password_reset_tokens 
+                SET used_at = CURRENT_TIMESTAMP, is_active = FALSE 
+                WHERE id = %s
+            """, (token_id,))
+            
+            # Deactivate all other reset tokens for this user
+            cursor.execute("""
+                UPDATE password_reset_tokens 
+                SET is_active = FALSE 
+                WHERE user_id = %s AND id != %s
+            """, (user_id, token_id))
+            
+            conn.commit()
+            conn.close()
+            
+            logger.info(f"Password reset completed successfully for user: {username} (ID: {user_id})")
+            return True
+            
+        except (ValidationError, AuthenticationError):
+            raise
+        except Exception as e:
+            logger.error(f"Error during password reset confirmation: {str(e)}")
+            raise AuthenticationError("Password reset failed")
+    
+    def cleanup_expired_reset_tokens(self) -> int:
+        """Clean up expired password reset tokens (for maintenance)."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # Use the database function we created
+            cursor.execute("SELECT cleanup_expired_password_reset_tokens()")
+            result = cursor.fetchone()
+            deleted_count = result[0] if result else 0
+            
+            conn.close()
+            
+            if deleted_count > 0:
+                logger.info(f"Cleaned up {deleted_count} expired password reset tokens")
+            
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up expired reset tokens: {str(e)}")
+            return 0
 
 
 # Global auth manager instance

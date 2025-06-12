@@ -104,6 +104,18 @@ CREATE TABLE gpx_files (
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
 );
 
+-- Password reset tokens for secure password recovery
+CREATE TABLE password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance
 CREATE INDEX idx_routes_user_id ON routes(user_id);
 CREATE INDEX idx_waypoints_route_id ON waypoints(route_id);
@@ -113,6 +125,9 @@ CREATE INDEX idx_track_points_route_id ON track_points(route_id);
 CREATE INDEX idx_track_points_order ON track_points(route_id, point_index);
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+CREATE INDEX idx_password_reset_tokens_token ON password_reset_tokens(token);
+CREATE INDEX idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
 
 -- Update trigger for routes.updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -132,3 +147,16 @@ CREATE TRIGGER update_routes_updated_at
     BEFORE UPDATE ON routes 
     FOR EACH ROW 
     EXECUTE FUNCTION update_updated_at_column(); 
+
+-- Function to cleanup expired password reset tokens (for maintenance)
+CREATE OR REPLACE FUNCTION cleanup_expired_password_reset_tokens()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    DELETE FROM password_reset_tokens 
+    WHERE expires_at < CURRENT_TIMESTAMP;
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql; 

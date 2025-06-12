@@ -196,6 +196,21 @@ export const authApi = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+
+  // Request password reset
+  requestPasswordReset: async (email: string) => {
+    const response = await api.post('/auth/request-password-reset', { email });
+    return response.data;
+  },
+
+  // Confirm password reset
+  confirmPasswordReset: async (token: string, newPassword: string) => {
+    const response = await api.post('/auth/confirm-password-reset', {
+      token,
+      new_password: newPassword
+    });
+    return response.data;
+  },
 };
 
 export const healthApi = {

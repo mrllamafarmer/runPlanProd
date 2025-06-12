@@ -65,8 +65,11 @@ def _extract_time_from_timestamp(timestamp_value) -> Optional[str]:
         
     try:
         # Handle different timestamp formats
-        if hasattr(timestamp_value, 'time'):
-            # datetime object
+        if hasattr(timestamp_value, 'hour') and hasattr(timestamp_value, 'minute'):
+            # datetime.time object
+            return f"{timestamp_value.hour:02d}:{timestamp_value.minute:02d}"
+        elif hasattr(timestamp_value, 'time'):
+            # datetime.datetime object
             time_obj = timestamp_value.time()
             return f"{time_obj.hour:02d}:{time_obj.minute:02d}"
         elif isinstance(timestamp_value, str):
@@ -294,7 +297,7 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                     ))
                     end_waypoint_id = cursor.fetchone()['id']
                     logger.info(f"Created end waypoint with ID: {end_waypoint_id}")
-                
+                    
                 # Save track points directly to route (no route segments needed)
                 logger.info(f"Saving {len(track_points)} track points to route {route_id}")
                 for i, point in enumerate(track_points):
@@ -305,34 +308,34 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                         ) VALUES (%s, %s, %s, %s, %s, %s)
                     """, (
                         route_id,
-                        point.get('latitude', point.get('lat')),  # Support both formats
-                        point.get('longitude', point.get('lon')),  # Support both formats
-                        point.get('elevation'),
-                        point.get('cumulativeDistance', point.get('distance', 0)),
-                        i
+                            point.get('latitude', point.get('lat')),  # Support both formats
+                            point.get('longitude', point.get('lon')),  # Support both formats
+                            point.get('elevation'),
+                            point.get('cumulativeDistance', point.get('distance', 0)),
+                            i
+                        ))
+                    
+                    logger.info(f"Saved {len(track_points)} track points for route {route_id}")
+                    
+                    # Save GPX file metadata
+                    file_content = route_data.get('gpxData', route_name)  # Use GPX data if available, otherwise filename
+                    file_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
+                    
+                    cursor.execute("""
+                        INSERT INTO gpx_files (
+                            route_id, original_filename, file_hash,
+                            original_point_count, simplified_point_count, compression_ratio
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        route_id,
+                        route_name,
+                        file_hash,
+                        len(track_points),  # Original points (TODO: could be different if we had raw GPX point count)
+                        len(track_points),  # Simplified points (same for now, until optimization implemented)
+                        1.0  # Compression ratio (1.0 = no compression for now)
                     ))
-                
-                logger.info(f"Saved {len(track_points)} track points for route {route_id}")
-                
-                # Save GPX file metadata
-                file_content = route_data.get('gpxData', route_name)  # Use GPX data if available, otherwise filename
-                file_hash = hashlib.sha256(file_content.encode('utf-8')).hexdigest()
-                
-                cursor.execute("""
-                    INSERT INTO gpx_files (
-                        route_id, original_filename, file_hash,
-                        original_point_count, simplified_point_count, compression_ratio
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    route_id,
-                    route_name,
-                    file_hash,
-                    len(track_points),  # Original points (TODO: could be different if we had raw GPX point count)
-                    len(track_points),  # Simplified points (same for now, until optimization implemented)
-                    1.0  # Compression ratio (1.0 = no compression for now)
-                ))
-                
-                logger.info(f"Saved GPX file metadata for route {route_id}")
+                    
+                    logger.info(f"Saved GPX file metadata for route {route_id}")
             
             logger.info(f"Route saved successfully for user {user_id} with ID {route_id}")
             return route_id
@@ -453,12 +456,12 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
             
             # Process track points
             for point in track_points:
-                result['trackPoints'].append({
+                    result['trackPoints'].append({
                     'lat': point['latitude'],
                     'lon': point['longitude'],
                     'elevation': point['elevation_meters'],
                     'distance': point['cumulative_distance_meters']
-                })
+                    })
             
             return result
             
