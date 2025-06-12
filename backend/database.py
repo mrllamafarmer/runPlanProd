@@ -19,6 +19,73 @@ from logging_config import get_logger
 
 logger = get_logger(__name__)
 
+def _format_start_time_for_db(start_time_str: Optional[str]) -> Optional[str]:
+    """
+    Format start time for database storage.
+    Handles both TIME and TIMESTAMP database field types.
+    
+    Args:
+        start_time_str: Time string in HH:MM format
+        
+    Returns:
+        Formatted time string for database or None
+    """
+    if not start_time_str:
+        return None
+        
+    try:
+        # Validate HH:MM format
+        time_parts = start_time_str.split(':')
+        if len(time_parts) >= 2:
+            hours = int(time_parts[0])
+            minutes = int(time_parts[1])
+            if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                # For TIMESTAMP fields, we need to provide a full timestamp
+                # Use a default date (2024-01-01) with the specified time
+                return f"2024-01-01 {hours:02d}:{minutes:02d}:00"
+        
+        logger.warning(f"Invalid start_time format: {start_time_str}")
+        return None
+    except (ValueError, IndexError):
+        logger.warning(f"Error parsing start_time: {start_time_str}")
+        return None
+
+def _extract_time_from_timestamp(timestamp_value) -> Optional[str]:
+    """
+    Extract time portion from a timestamp value.
+    
+    Args:
+        timestamp_value: Database timestamp value
+        
+    Returns:
+        Time string in HH:MM format or None
+    """
+    if not timestamp_value:
+        return None
+        
+    try:
+        # Handle different timestamp formats
+        if hasattr(timestamp_value, 'time'):
+            # datetime object
+            time_obj = timestamp_value.time()
+            return f"{time_obj.hour:02d}:{time_obj.minute:02d}"
+        elif isinstance(timestamp_value, str):
+            # String timestamp - extract time portion
+            if ' ' in timestamp_value:
+                time_part = timestamp_value.split(' ')[1]
+                if ':' in time_part:
+                    time_components = time_part.split(':')[:2]  # Take only HH:MM
+                    return ':'.join(time_components)
+            elif ':' in timestamp_value:
+                # Already just time
+                time_components = timestamp_value.split(':')[:2]  # Take only HH:MM
+                return ':'.join(time_components)
+        
+        return None
+    except Exception as e:
+        logger.warning(f"Error extracting time from timestamp {timestamp_value}: {e}")
+        return None
+
 # Database configuration from environment variables
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
@@ -132,8 +199,8 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
             cursor.execute("""
                 INSERT INTO routes (
                     user_id, name, description, total_distance_meters,
-                    total_elevation_gain_meters, estimated_time_seconds, is_public
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    total_elevation_gain_meters, estimated_time_seconds, is_public, start_time
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
             """, (
                 user_id,
@@ -142,7 +209,8 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                 total_distance_meters,
                 route_data.get('totalElevationGain', 0),
                 route_data.get('targetTimeSeconds', 0),
-                route_data.get('is_public', False)
+                route_data.get('is_public', False),
+                _format_start_time_for_db(route_data.get('start_time'))
             ))
             
             result = cursor.fetchone()
@@ -374,7 +442,7 @@ def get_route_detail(route_id: str, user_id: int) -> Optional[Dict[str, Any]]:
                     'totalElevationLoss': route['total_elevation_loss_meters'] or 0,
                     'targetTimeSeconds': route['target_time_seconds'],
                     'slowdownFactorPercent': route['slowdown_factor_percent'],
-                    'startTime': str(route['start_time']) if route['start_time'] else None,
+                    'startTime': _extract_time_from_timestamp(route['start_time']),
                     'created_at': route['created_at'].isoformat() if route['created_at'] else None,
                     'owner': route['username'],
                     'is_public': route['is_public']
@@ -462,28 +530,13 @@ def update_route_data(route_id: str, update_data: Dict[str, Any], user_id: int) 
                 if field in field_mapping:
                     db_field = field_mapping[field]
                     
-                    # Special handling for start_time to ensure proper TIME format
+                    # Special handling for start_time to ensure proper format
                     if field == 'start_time' and value is not None:
-                        # Validate HH:MM format and convert if needed
-                        if isinstance(value, str) and ':' in value:
-                            try:
-                                # Validate time format
-                                time_parts = value.split(':')
-                                if len(time_parts) >= 2:
-                                    hours = int(time_parts[0])
-                                    minutes = int(time_parts[1])
-                                    if 0 <= hours <= 23 and 0 <= minutes <= 59:
-                                        # Format as HH:MM for TIME type
-                                        formatted_time = f"{hours:02d}:{minutes:02d}"
-                                        update_fields.append(f"{db_field} = %s")
-                                        values.append(formatted_time)
-                                        continue
-                            except (ValueError, IndexError):
-                                logger.warning(f"Invalid start_time format: {value}, skipping")
-                                continue
-                        else:
-                            logger.warning(f"Invalid start_time value: {value}, skipping")
-                            continue
+                        formatted_time = _format_start_time_for_db(value)
+                        if formatted_time:
+                            update_fields.append(f"{db_field} = %s")
+                            values.append(formatted_time)
+                        continue
                     
                     update_fields.append(f"{db_field} = %s")
                     values.append(value)
