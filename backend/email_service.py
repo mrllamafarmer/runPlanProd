@@ -22,18 +22,19 @@ class EmailService:
     
     def __init__(self):
         # Email configuration from environment variables
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+        self.smtp_server = os.getenv("SMTP_SERVER", "smtp-relay.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_secure = os.getenv("SMTP_SECURE", "false").lower() == "true"
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.from_email = os.getenv("FROM_EMAIL", self.smtp_username)
+        self.from_email = os.getenv("FROM_EMAIL", "")
         self.from_name = os.getenv("FROM_NAME", "RunPlan Pro")
         
         # Frontend URL for reset links
         self.frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3450")
         
-        # Development mode (if no SMTP configured, just log emails)
-        self.is_dev_mode = not (self.smtp_username and self.smtp_password)
+        # Development mode (if no FROM_EMAIL configured, just log emails)
+        self.is_dev_mode = not self.from_email
         
         if self.is_dev_mode:
             logger.warning("Email service running in development mode - emails will be logged, not sent")
@@ -163,8 +164,9 @@ class EmailService:
             
             # Send email
             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()  # Enable encryption
-                server.login(self.smtp_username, self.smtp_password)
+                if not self.smtp_secure:
+                    server.starttls()  # Enable STARTTLS encryption
+                # No login required for IP-based authentication
                 server.send_message(message)
             
             logger.info(f"Password reset email sent successfully to {to_email}")
