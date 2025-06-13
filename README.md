@@ -56,7 +56,7 @@ cd runPlanPrototype
 docker-compose up -d
 
 # Access the application
-open http://localhost:3000
+open http://localhost:3450
 ```
 
 ### Manual Setup
@@ -68,7 +68,7 @@ npm install
 npm start
 
 # Access the application
-open http://localhost:3000
+open http://localhost:3450
 ```
 
 ## Usage
