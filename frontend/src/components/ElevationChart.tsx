@@ -8,9 +8,11 @@ import {
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ChartOptions
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import annotationPlugin from 'chartjs-plugin-annotation';
 import { TrackPoint, Waypoint } from '../types';
 
 ChartJS.register(
@@ -21,13 +23,21 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  annotationPlugin
 );
 
 interface ElevationChartProps {
   trackPoints: TrackPoint[];
   waypoints?: Waypoint[];
   height?: string;
+}
+
+interface WaypointAnnotation {
+  index: number;
+  distance: number;
+  elevation: number | undefined;
+  name: string;
 }
 
 export default function ElevationChart({ 
@@ -135,7 +145,7 @@ export default function ElevationChart({
     };
   }, [trackPoints, waypoints]);
 
-  const chartOptions = {
+  const chartOptions: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -156,6 +166,30 @@ export default function ElevationChart({
             return `Elevation: ${tooltipItem.raw.toFixed(0)} ft`;
           }
         }
+      },
+      annotation: {
+        annotations: chartData.waypointAnnotations?.map((waypoint) => ({
+          type: 'point',
+          xValue: waypoint.index,
+          yValue: waypoint.elevation || 0,
+          backgroundColor: waypoint.name.toLowerCase().includes('start') ? '#10B981' :
+                         waypoint.name.toLowerCase().includes('finish') ? '#EF4444' :
+                         '#3B82F6',
+          borderColor: 'white',
+          borderWidth: 2,
+          radius: 6,
+          label: {
+            enabled: true,
+            content: waypoint.name,
+            position: 'top',
+            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            padding: 4,
+            borderRadius: 4,
+            font: {
+              size: 10
+            }
+          }
+        })) || []
       }
     },
     scales: {
