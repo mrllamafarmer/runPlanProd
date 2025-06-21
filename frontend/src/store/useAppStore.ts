@@ -4,6 +4,7 @@ import { AppState, TrackPoint, Waypoint, CustomLeg, RouteData, FileInfo, RouteLi
 interface AppStore extends AppState {
   // Actions for route data
   setCurrentRoute: (route: RouteData | null) => void;
+  updateCurrentRoute: (updates: Partial<RouteData>) => void;
   setTrackPoints: (points: TrackPoint[]) => void;
   setWaypoints: (waypoints: Waypoint[]) => void;
   addCustomLeg: (leg: CustomLeg) => void;
@@ -77,6 +78,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   
   // Route data actions
   setCurrentRoute: (route) => set({ currentRoute: route }),
+  updateCurrentRoute: (updates) => set((state) => ({
+    currentRoute: state.currentRoute ? { ...state.currentRoute, ...updates } : null
+  })),
   setTrackPoints: (points) => set({ trackPoints: points }),
   setWaypoints: (waypoints) => set({ waypoints }),
   

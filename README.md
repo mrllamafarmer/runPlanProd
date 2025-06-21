@@ -20,6 +20,13 @@ A web-based application for planning and analyzing GPS routes for running, hikin
 - **Save & Load Routes**: Persistent storage of analyzed routes with all settings
 - **Route Editing**: Update existing route plans without losing previous work
 - **Visual Editing Indicators**: Clear feedback when modifying saved routes
+- **User Authentication**: Secure multi-user support with JWT-based authentication
+
+### Race Analysis
+- **GPX Comparison**: Upload actual race GPX files and compare against planned routes
+- **Performance Analysis**: Detailed waypoint-by-waypoint comparison of planned vs actual times
+- **Pace Analysis**: Compare planned and actual paces for each route segment
+- **Save & Load Analysis**: Store race analyses for future reference and improvement
 
 ### Export Options
 - **CSV Export**: Detailed waypoint data for spreadsheet analysis
@@ -29,20 +36,23 @@ A web-based application for planning and analyzing GPS routes for running, hikin
 ## Technology Stack
 
 ### Backend
-- **Node.js** with Express.js framework
-- **SQLite** database for route storage and waypoint data
-- **RESTful API** for route management operations
+- **Python FastAPI** framework with JWT authentication
+- **PostgreSQL** database with function-based operations
+- **RESTful API** with comprehensive error handling and logging
+- **Structured logging** with rotation and monitoring
 
 ### Frontend
-- **Vanilla HTML/CSS/JavaScript** - no frameworks, fast loading
-- **Leaflet.js** for interactive mapping and route visualization
-- **Chart.js** for elevation profile charts
-- **jsPDF** for client-side PDF generation
+- **React with TypeScript** for modern component-based architecture
+- **Zustand** for state management
+- **Tailwind CSS** for responsive design
+- **React-Leaflet** for interactive mapping and route visualization
+- **Recharts** for elevation profile charts
 
 ### Infrastructure
 - **Docker** containerization for easy deployment
 - **Docker Compose** for development environment
-- **Volume mounting** for persistent database storage
+- **PostgreSQL** with persistent volume storage
+- **Multi-stage Docker builds** for optimized production images
 
 ## Getting Started
 
@@ -56,35 +66,113 @@ cd runPlanPrototype
 docker-compose up -d
 
 # Access the application
-open http://localhost:3450
+open http://localhost
 ```
 
-### Manual Setup
+### Environment Setup
+The application uses environment variables for configuration. Default values are provided in the Docker Compose file for development.
+
+### Database Migrations
+When deploying updates that include database changes, run the migration script:
+
 ```bash
-# Install dependencies
-npm install
+# Run database migrations
+./scripts/run-migrations.sh
+```
 
-# Start the server
-npm start
+This script will:
+- Check if the database container is running
+- Apply any new migration files in order
+- Provide clear feedback on migration status
 
-# Access the application
-open http://localhost:3450
+### Manual Database Updates
+If you prefer to run migrations manually:
+
+```bash
+# Run all migrations
+docker-compose exec -T database psql -U runplan_user -d runplanprod < backend/database/migrations/001_fix_race_analysis_detail_function.sql
+
+# Or reload all database functions
+docker-compose exec database psql -U runplan_user -d runplanprod -c "$(cat backend/database/functions/race_analysis_functions.sql)"
 ```
 
 ## Usage
 
-1. **Upload a GPX File**: Drag and drop or use the "Choose GPX File" button
-2. **Review Route Data**: Check distance, elevation, and track points
-3. **Add Waypoints**: Create custom stops along your route
-4. **Set Target Time** (optional): Plan your pacing strategy
-5. **Save Route**: Store your analysis for future reference
-6. **Export**: Generate CSV or PDF reports for race day
+### Route Planning
+1. **Create Account**: Register and log in to access route planning features
+2. **Upload a GPX File**: Drag and drop or use the "Choose GPX File" button
+3. **Review Route Data**: Check distance, elevation, and track points
+4. **Add Waypoints**: Create custom stops along your route with types (start, checkpoint, finish, POI)
+5. **Set Target Time**: Plan your pacing strategy with elevation-adjusted calculations
+6. **Configure Rest Times**: Add planned stops at waypoints
+7. **Save Route**: Store your analysis for future reference
+
+### Race Analysis
+1. **Load Saved Route**: Select a previously saved route plan
+2. **Upload Race GPX**: Upload your actual race GPX file
+3. **Compare Performance**: View detailed comparison of planned vs actual performance
+4. **Analyze Pacing**: Review pace differences for each route segment
+5. **Save Analysis**: Store race analysis for future review and improvement
+6. **Load Previous Analysis**: Access and review past race performances
+
+### Data Management
+- **Load Saved Routes**: Access previously planned routes
+- **Load Race Analyses**: Review past race performance comparisons
+- **Delete Data**: Remove unwanted routes or analyses
 
 ## File Support
 
 - Standard GPX files from GPS devices
 - GPX exports from Strava, Garmin Connect, and similar apps
 - Route files from mapping software like Gaia GPS or AllTrails
+- Both route planning GPX files and actual race tracking GPX files
+
+## Development
+
+### Project Structure
+```
+├── backend/                 # Python FastAPI backend
+│   ├── api/                # API endpoints
+│   ├── database/           # Database functions and migrations
+│   │   ├── functions/      # PostgreSQL functions
+│   │   └── migrations/     # Database migration scripts
+│   └── models/             # Data models
+├── frontend/               # React TypeScript frontend
+│   └── src/
+│       ├── components/     # React components
+│       ├── services/       # API services
+│       └── stores/         # Zustand state management
+├── scripts/                # Utility scripts
+│   └── run-migrations.sh   # Database migration runner
+└── docker-compose.yml      # Development environment
+```
+
+### Database Migrations
+Database schema changes are managed through migration files:
+
+1. **Create Migration**: Add new `.sql` files to `backend/database/migrations/`
+2. **Number Migrations**: Use format `001_description.sql`, `002_description.sql`, etc.
+3. **Run Migrations**: Use `./scripts/run-migrations.sh` to apply changes
+4. **Production Deployment**: Always run migrations after pulling updates
+
+### Testing
+- Backend tests: `docker-compose exec backend pytest`
+- Frontend tests: `docker-compose exec frontend npm test`
+
+## Deployment
+
+### Production Checklist
+1. Pull latest changes: `git pull origin main`
+2. Run database migrations: `./scripts/run-migrations.sh`
+3. Restart services: `docker-compose restart`
+4. Verify health checks: Check `/health` endpoint
+
+### Environment Variables
+Configure these for production deployment:
+- Database credentials
+- JWT secret keys
+- CORS origins
+- Log levels
 
 ## License
 

@@ -4,6 +4,7 @@ import Header from './components/Header';
 import TabNavigation from './components/TabNavigation';
 import AnalyzerTab from './components/AnalyzerTab';
 import SavedRoutesTab from './components/SavedRoutesTab';
+import RaceAnalysisTab from './components/RaceAnalysisTab';
 import ToastContainer from './components/ToastContainer';
 import LoginForm from './components/LoginForm';
 import RegistrationForm from './components/RegistrationForm';
@@ -143,6 +144,7 @@ function App() {
                 <Route path="/" element={<Navigate to="/analyzer" replace />} />
                 <Route path="/analyzer" element={<AnalyzerTab />} />
                 <Route path="/saved-routes" element={<SavedRoutesTab />} />
+                <Route path="/race-analysis" element={<RaceAnalysisTab />} />
                 <Route path="*" element={<Navigate to="/analyzer" replace />} />
               </Routes>
             </div>

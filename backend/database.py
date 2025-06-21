@@ -301,18 +301,20 @@ def save_route_data(user_id: int, route_data: Dict[str, Any]) -> int:
                 # Save track points directly to route (no route segments needed)
                 logger.info(f"Saving {len(track_points)} track points to route {route_id}")
                 for i, point in enumerate(track_points):
+                    cumulative_distance = point.get('cumulativeDistance', point.get('distance', 0))
                     cursor.execute("""
                         INSERT INTO track_points (
                             route_id, latitude, longitude, elevation_meters,
-                            cumulative_distance_meters, point_index
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                            cumulative_distance_meters, point_index, distance_from_start_meters
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         route_id,
                             point.get('latitude', point.get('lat')),  # Support both formats
                             point.get('longitude', point.get('lon')),  # Support both formats
                             point.get('elevation'),
-                            point.get('cumulativeDistance', point.get('distance', 0)),
-                            i
+                            cumulative_distance,
+                            i,
+                            cumulative_distance  # Use same value for distance_from_start_meters
                         ))
                     
                     logger.info(f"Saved {len(track_points)} track points for route {route_id}")

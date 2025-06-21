@@ -30,6 +30,7 @@ from exceptions import (
     RouteNotFoundException, WaypointNotFoundException
 )
 from logging_config import setup_logging
+from api.race_analysis import router as race_analysis_router
 
 # Initialize logging first
 logger = setup_logging()
@@ -66,6 +67,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(race_analysis_router)
 
 # Request logging middleware
 @app.middleware("http")

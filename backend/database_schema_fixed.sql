@@ -91,6 +91,8 @@ CREATE TABLE track_points (
     FOREIGN KEY (route_id) REFERENCES routes(id) ON DELETE CASCADE
 );
 
+-- NOTE: Legacy route_segment_id column removed - use route_id for direct route linking
+
 -- Original GPX metadata (optional, for backup/export)
 CREATE TABLE gpx_files (
     id SERIAL PRIMARY KEY,
